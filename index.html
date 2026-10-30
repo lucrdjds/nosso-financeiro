@@ -93,7 +93,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
  </div>
  <p id="status" class="mut"></p><div class="note"><strong>Versão de teste.</strong> Confira os resultados antes de tomar decisões financeiras. Os acertos e o uso da reserva em metas estão temporariamente indisponíveis.</div>
  <div id="ws" hidden>
-  <section id="v-inicio"></section>
+  <section id="v-inicio"></section><section id="v-detalhes" hidden></section>
   <section id="v-metas" hidden><div class="sec"><h2>Metas do casal</h2><p class="mut">Acompanhem os sonhos e o dinheiro guardado para cada um.</p><button class="wide" id="novaMeta">Criar meta</button></div><div id="metalist"></div><button class="ghost wide" id="abrirLimites">Ver limites por categoria</button></section>
   <section id="v-gastos" hidden>
    <div class="sec" style="margin-top:0"><h2>Gastos do mês <span id="gsum" class="mut"></span></h2>
@@ -102,7 +102,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
    <div id="glist"></div>
   </section>
   <section id="v-limites" hidden>
-   <div class="sec" style="margin-top:0"><h2>Limites por categoria</h2><p class="mut">Toque numa categoria para definir ou mudar o limite. Conta o valor total das compras do mês, inclusive parceladas.</p></div>
+   <div class="sec" style="margin-top:0"><h2>Planejar o mês</h2><p class="mut">Primeiro informe renda, contas e quanto deseja guardar. Depois escolha quanto reservar para cada categoria.</p><button type="button" class="ghost wide" id="abrirPlano">Definir renda e compromissos</button><button type="button" class="ghost wide" id="abrirContas">Cadastrar contas fixas</button><p class="mut">Os limites contam o valor total das compras feitas no mês, inclusive parceladas.</p></div>
    <div id="llist"></div>
    <div class="note" id="limresumo"></div><form id="limitform"><label>Categoria<select id="limcat" required></select></label><label>Limite do mês (R$)<input id="limval" type="number" min="0" step="0.01" required inputmode="decimal"></label><label>Ajuste pela barra<input id="limslider" type="range" min="0" max="10000" step="10" value="0"></label><p id="limpreview" class="mut"></p><button class="wide">Salvar limite</button></form>
   </section>
@@ -214,7 +214,15 @@ function rInicio(C){
   hero.append(tr,h('small','','Usaram '+Math.round(pct*100)+'% do que podiam gastar'+(isCur?' · passou '+Math.round(tp*100)+'% do mês':'')));
  }
  el.append(hero);
-
+ const sec=h('div','sec',h('h2','','Seus limites do mês'));
+ sec.append(h('p','mut','Acompanhe o valor das compras feitas neste mês. Compras parceladas contam pelo valor total na data da compra.'));
+ if(!S.lim.length){sec.append(h('div','empty','Ainda não há limites definidos. Toque em Planejar para criar seus limites.'))}
+ for(const c of S.cats){const l=S.lim.find(x=>x.categoria_id===c.id);if(!l)continue;const lim=Number(l.valor),spent=(C.buy[c.id]||0)/100,left=lim-spent;
+ const card=h('div','lim',h('div','row',h('strong','',c.nome),mv(lim)));const bar=h('div','bar'),fill=h('i',left<0?'over':(lim>0&&spent>=lim*.8?'warn':''));fill.style.width=Math.min(100,lim>0?100*spent/lim:(spent>0?100:0))+'%';bar.append(fill);
+ card.append(bar,h('div','row',h('small','','Já gastaram'),mv(spent)),h('div','row',h('small','',left>=0?'Ainda tem':'Passou do limite'),mv(Math.abs(left))),h('small','mut','Referência semanal: '),mv(lim/4),h('small','mut',' por semana (limite mensal dividido por 4).'));sec.append(card)}
+ const btn=h('button','ghost wide','Planejar limites');btn.onclick=()=>show('limites');sec.append(btn);el.append(sec);
+ const link=h('button','ghost wide','Ver detalhes da renda e gastos');link.onclick=()=>show('detalhes');el.append(link);
+ const details=$('#v-detalhes');details.replaceChildren(h('div','sec',h('h2','','Detalhes do mês')));const back=h('button','ghost wide','Voltar ao início');back.onclick=()=>show('inicio');details.append(back);
  const al=[];
  for(const c of S.cats){const l=S.lim.find(x=>x.categoria_id===c.id);if(!l)continue;const s=(C.buy[c.id]||0)/100,v=+l.valor;
   if(s>v)al.push(['red',c.nome+' passou do limite em ',s-v]);else if(v>0&&s>=v*.8)al.push(['',c.nome+' já usou '+Math.round(100*s/v)+'% do limite',null])}
@@ -222,17 +230,17 @@ function rInicio(C){
  for(const cd of S.cards){let d=new Date(t0.getFullYear(),t0.getMonth(),cd.vencimento);if(d<t0)d=new Date(t0.getFullYear(),t0.getMonth()+1,cd.vencimento);
   const a=(C.bills[cd.id]||{})[d.getFullYear()*12+d.getMonth()],days=Math.round((d-t0)/864e5);
   if(a&&days<=7)al.push(['red','Fatura '+cd.nome+' vence '+(days===0?'hoje':'em '+days+(days===1?' dia':' dias'))+' · ',a/100])}
- if(al.length){const s=h('div','sec',h('h2','','Atenção'));for(const [c,t,v] of al)s.append(h('div','alert '+c,h('span','',t),v!=null?mv(v):null));el.append(s)}
+ if(al.length){const s=h('div','sec',h('h2','','Atenção'));for(const [c,t,v] of al)s.append(h('div','alert '+c,h('span','',t),v!=null?mv(v):null));details.append(s)}
 
  if(P){const s=h('div','sec',h('h2','','Para onde vai a renda'));
   for(const [l,v] of [['Renda líquida',P.renda],['Contas fixas cadastradas',S.fixas.filter(x=>x.ativo).reduce((a,x)=>a+Number(x.valor),0)],['Outras contas fixas',P.fixos],['Fatura informada',P.fatura_anterior],['Cartões neste mês',C.cardC/100],['PIX, débito e dinheiro',C.cash/100],['Reserva',P.reserva],['Aportes extras',S.aportes.filter(a=>a.data.slice(0,7)===mk()&&!a.reserva).reduce((x,a)=>x+Number(a.valor),0)]])s.append(h('div','row',h('span','',l),mv(v)));
-  const b=h('button','ghost wide','Ajustar plano');b.onclick=openPlan;s.append(b);el.append(s)}
+  const b=h('button','ghost wide','Ajustar plano');b.onclick=openPlan;s.append(b);details.append(s)}
 
  const tot=Object.values(C.buy).reduce((a,b)=>a+b,0)/100,top=S.cats.map(c=>[c.nome,(C.buy[c.id]||0)/100]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,5);
  const s=h('div','sec',h('h2','','Onde mais gastaram',h('span','mut',mv(tot))));
  if(!top.length)s.append(h('div','empty','Nenhum gasto neste mês. Toque no + para lançar o primeiro.'));
  for(const [n,v] of top){const bar=h('div','bar'),i=h('i');i.style.width=(100*v/tot)+'%';bar.append(i);s.append(h('div','lim',h('div','row',h('strong','',n),mv(v)),bar))}
- el.append(s);
+ details.append(s);
 }
 
 function nome(id){return S.profiles.find(p=>p.user_id===id)?.nome||'Pessoa não identificada'}
@@ -281,7 +289,7 @@ function rLimites(C){
   const card=h('div','lim',h('div','row',h('strong','',c.nome),mv(s)));
   card.append(h('small','',l?(s<=v?'Restam ':'Acima em ')+R(Math.abs(v-s))+' de '+R(v):'Sem limite definido · toque para definir'));
   if(l){const bar=h('div','bar'),i=h('i',s>v?'over':(s>=v*.8?'warn':''));i.style.width=Math.min(100,v>0?100*s/v:(s>0?100:0))+'%';bar.append(i);card.append(bar)}
-  card.onclick=()=>{$('#limcat').value=c.id;$('#limval').value=l?l.valor:'';$('#limval').focus()};
+  card.onclick=()=>{$('#limcat').value=c.id;$('#limval').value=l?l.valor:'';atualizarBarra();$('#limval').focus()};
   L.append(card);
  }
  const keep=$('#limcat').value;$('#limcat').replaceChildren(...S.cats.map(c=>{const o=h('option','',c.nome);o.value=c.id;return o}));if(keep)$('#limcat').value=keep;
@@ -356,7 +364,7 @@ function show(v){
  window.scrollTo({top:0});
 }
 $$('.nav [data-view]').forEach(b=>b.onclick=()=>show(b.dataset.view));
-$('#gear').onclick=()=>show('config');
+$('#gear').onclick=()=>show('config');$('#abrirPlano').onclick=openPlan;$('#abrirContas').onclick=()=>show('config');
 $('#fixform').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),nome=f.get('nome').trim();if(!nome){toast('Informe o nome da conta.');return}const b=e.target.querySelector('button');b.disabled=true;const {error}=await db.from('despesas_fixas').insert({grupo_id:group,descricao:nome,valor:Number(f.get('valor'))});b.disabled=false;if(error){toast('Não foi possível salvar a conta fixa.');return}e.target.reset();toast('Conta fixa adicionada.');await refresh()};
 $('#abrirLimites').onclick=()=>show('limites');
 $('#novaMeta').onclick=()=>{$('#metaform').reset();$('#metadialog').showModal()};
