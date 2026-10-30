@@ -104,13 +104,14 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
   <section id="v-limites" hidden>
    <div class="sec" style="margin-top:0"><h2>Limites por categoria</h2><p class="mut">Toque numa categoria para definir ou mudar o limite. Conta o valor total das compras do mês, inclusive parceladas.</p></div>
    <div id="llist"></div>
-   <form id="limitform"><label>Categoria<select id="limcat" required></select></label><label>Limite do mês (R$)<input id="limval" type="number" min="0" step="0.01" required inputmode="decimal"></label><button class="wide">Salvar limite</button></form>
+   <div class="note" id="limresumo"></div><form id="limitform"><label>Categoria<select id="limcat" required></select></label><label>Limite do mês (R$)<input id="limval" type="number" min="0" step="0.01" required inputmode="decimal"></label><label>Ajuste pela barra<input id="limslider" type="range" min="0" max="10000" step="10" value="0"></label><p id="limpreview" class="mut"></p><button class="wide">Salvar limite</button></form>
   </section>
   <section id="v-faturas" hidden>
    <div class="sec" style="margin-top:0"><h2>Faturas previstas</h2><p class="mut">Estimativa feita só com as compras lançadas aqui. Confirme datas e valores no banco.</p></div>
    <div id="flist"></div>
   </section>
   <section id="v-config" hidden>
+   <div class="sec"><h2>Contas fixas recorrentes</h2><p class="mut">Valores previstos todos os meses, fora do cartão. Não lance novamente como gasto ou fatura. Alterações valem para todos os meses.</p><div id="fixlist"></div><form id="fixform"><label>Nome da conta<input name="nome" required maxlength="100" placeholder="Ex.: aluguel"></label><label>Valor mensal (R$)<input name="valor" type="number" min="0.01" step="0.01" required></label><button class="wide ghost">Adicionar conta fixa</button></form></div>
    <div class="sec" style="margin-top:0"><h2>Categorias</h2>
    <form id="catForm"><label>Nova categoria<input name="name" required maxlength="50" placeholder="Ex.: Mercado"></label><button class="wide ghost">Adicionar categoria</button></form></div>
    <div class="sec"><h2>Cartões</h2><div id="cardlist"></div>
@@ -136,8 +137,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
  <label>Categoria</label><div class="chips" id="catchips"></div>
  <label>Como pagou?</label><div class="chips" id="paychips"></div>
  <label>Quem pagou?</label><div class="chips" id="payerchips"></div>
- <label>Como dividir?</label><div class="chips" id="splitchips"></div>
- <div id="pctwrap" hidden><label>Porcentagem que cabe a quem pagou (%)<input name="pct" type="number" min="0" max="100" step="0.01" value="50"></label></div>
+ <div id="splitchips" hidden></div><div id="pctwrap" hidden><input name="pct" type="number" value="50"></div>
  <div id="instwrap" hidden><label>Parcelas<input name="installments" type="number" min="1" max="120" value="1"></label><p id="instprev" class="mut"></p></div>
  <label>Data<input name="date" type="date" required></label>
  <label>Observação (opcional)<input name="note" maxlength="200"></label>
@@ -149,8 +149,8 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
  <div class="dh"><h2>Plano do mês</h2><button type="button" class="ib" data-close aria-label="Fechar"><i data-i="x"></i></button></div>
  <p class="mut">Valores compartilhados entre vocês. Não repita aqui o que já lançou como gasto ou fatura.</p>
  <label>Renda líquida do mês<input type="number" name="renda" min="0" step="0.01" required inputmode="decimal" placeholder="Ex.: 11000"></label>
- <label>Contas fixas fora do cartão<input type="number" name="fixos" min="0" step="0.01" required inputmode="decimal" placeholder="Aluguel, luz, internet…"></label>
- <label>Faturas anteriores ainda não lançadas<input type="number" name="anterior" min="0" step="0.01" required inputmode="decimal" placeholder="Use 0 se não houver"></label>
+ <label>Outras contas fixas não cadastradas<input type="number" name="fixos" min="0" step="0.01" required inputmode="decimal" placeholder="Use 0 se já cadastrou em Ajustes"></label>
+ <label>Valor da fatura ainda não lançado no app<input type="number" name="anterior" min="0" step="0.01" required inputmode="decimal" placeholder="Ex.: 1369,00 ou 0"></label><p class="mut">Informe apenas a parte que não está registrada em gastos. Não inclua de novo as compras lançadas.</p>
  <label>Quanto querem guardar<input type="number" name="reserva" min="0" step="0.01" required inputmode="decimal" placeholder="Ex.: 1000"></label>
  <p class="mut" style="margin-top:12px">Sobra = renda − fixos − faturas anteriores − cartões do mês − PIX/débito/dinheiro − reserva. É uma estimativa, não o saldo do banco.</p>
  <button class="wide">Salvar plano</button>
@@ -176,7 +176,7 @@ const svg=n=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+IC[n]+'</svg>';
 $$('[data-i]').forEach(e=>e.outerHTML=svg(e.dataset.i));
 
 const now=new Date(),S={y:now.getFullYear(),mo:now.getMonth(),gastos:[],cats:[],cards:[],lim:[],plan:null,q:'',cat:''};
-let group=null,userId=null;S.profiles=[];S.settlements=[];S.metas=[];S.aportes=[];S.person='';let metaId=null;const mk=()=>S.y+'-'+pad(S.mo+1);
+let group=null,userId=null;S.profiles=[];S.settlements=[];S.metas=[];S.aportes=[];S.fixas=[];S.person='';let metaId=null;const mk=()=>S.y+'-'+pad(S.mo+1);
 const today=()=>new Date().toLocaleDateString('en-CA');
 
 /* ---------- cálculo ---------- */
@@ -191,7 +191,7 @@ function calc(){
   const b=bills[cd.id]||(bills[cd.id]={});
   for(let i=0;i<n;i++){const a=Math.floor(c/n)+(i<c%n?1:0);b[f+i]=(b[f+i]||0)+a;if(f+i===t)cardC+=a}
  }
- const P=S.plan,extra=S.aportes.filter(x=>x.data.slice(0,7)===k&&!x.reserva).reduce((a,x)=>a+Number(x.valor),0),budget=P?Number(P.renda)-Number(P.fixos)-Number(P.fatura_anterior)-Number(P.reserva)-extra:0;
+ const P=S.plan,fixas=S.fixas.filter(x=>x.ativo).reduce((a,x)=>a+Number(x.valor),0),extra=S.aportes.filter(x=>x.data.slice(0,7)===k&&!x.reserva).reduce((a,x)=>a+Number(x.valor),0),budget=P?Number(P.renda)-Number(P.fixos)-fixas-Number(P.fatura_anterior)-Number(P.reserva)-extra:0;
  return{cash,cardC,buy,bills,budget,sobra:P?budget-(cash+cardC)/100:null};
 }
 
@@ -225,14 +225,14 @@ function rInicio(C){
  if(al.length){const s=h('div','sec',h('h2','','Atenção'));for(const [c,t,v] of al)s.append(h('div','alert '+c,h('span','',t),v!=null?mv(v):null));el.append(s)}
 
  if(P){const s=h('div','sec',h('h2','','Para onde vai a renda'));
-  for(const [l,v] of [['Renda líquida',P.renda],['Contas fixas',P.fixos],['Faturas anteriores',P.fatura_anterior],['Cartões neste mês',C.cardC/100],['PIX, débito e dinheiro',C.cash/100],['Reserva',P.reserva],['Aportes extras',S.aportes.filter(a=>a.data.slice(0,7)===mk()&&!a.reserva).reduce((x,a)=>x+Number(a.valor),0)]])s.append(h('div','row',h('span','',l),mv(v)));
+  for(const [l,v] of [['Renda líquida',P.renda],['Contas fixas cadastradas',S.fixas.filter(x=>x.ativo).reduce((a,x)=>a+Number(x.valor),0)],['Outras contas fixas',P.fixos],['Fatura informada',P.fatura_anterior],['Cartões neste mês',C.cardC/100],['PIX, débito e dinheiro',C.cash/100],['Reserva',P.reserva],['Aportes extras',S.aportes.filter(a=>a.data.slice(0,7)===mk()&&!a.reserva).reduce((x,a)=>x+Number(a.valor),0)]])s.append(h('div','row',h('span','',l),mv(v)));
   const b=h('button','ghost wide','Ajustar plano');b.onclick=openPlan;s.append(b);el.append(s)}
 
  const tot=Object.values(C.buy).reduce((a,b)=>a+b,0)/100,top=S.cats.map(c=>[c.nome,(C.buy[c.id]||0)/100]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,5);
  const s=h('div','sec',h('h2','','Onde mais gastaram',h('span','mut',mv(tot))));
  if(!top.length)s.append(h('div','empty','Nenhum gasto neste mês. Toque no + para lançar o primeiro.'));
  for(const [n,v] of top){const bar=h('div','bar'),i=h('i');i.style.width=(100*v/tot)+'%';bar.append(i);s.append(h('div','lim',h('div','row',h('strong','',n),mv(v)),bar))}
- el.append(s);rAcerto(el);
+ el.append(s);
 }
 
 function nome(id){return S.profiles.find(p=>p.user_id===id)?.nome||'Pessoa não identificada'}
@@ -274,6 +274,7 @@ function rGastos(){
 
 function rLimites(C){
  const L=$('#llist');L.replaceChildren();
+ const total=S.lim.reduce((a,x)=>a+Number(x.valor),0);$('#limresumo').textContent=S.plan?'Limites distribuídos: '+R(total)+' de '+R(Math.max(0,C.budget))+' · '+(total>Math.max(0,C.budget)?'Excesso de '+R(total-Math.max(0,C.budget)):'Ainda disponível: '+R(Math.max(0,C.budget)-total)):'Defina primeiro o plano do mês para calcular o total disponível.';
  if(!S.cats.length)L.append(h('div','empty','Crie categorias em Ajustes para definir limites.'));
  for(const c of S.cats){
   const l=S.lim.find(x=>x.categoria_id===c.id),s=(C.buy[c.id]||0)/100,v=l?+l.valor:0;
@@ -284,7 +285,12 @@ function rLimites(C){
   L.append(card);
  }
  const keep=$('#limcat').value;$('#limcat').replaceChildren(...S.cats.map(c=>{const o=h('option','',c.nome);o.value=c.id;return o}));if(keep)$('#limcat').value=keep;
+ atualizarBarra();
 }
+function atualizarBarra(){const cat=$('#limcat').value,other=S.lim.filter(x=>x.categoria_id!==cat).reduce((a,x)=>a+Number(x.valor),0),max=S.plan?Math.max(0,calc().budget-other):0;$('#limslider').max=String(max);$('#limslider').value=String(Math.min(max,Number($('#limval').value)||0));$('#limpreview').textContent=S.plan?'Máximo para esta categoria agora: '+R(max)+'. Ajuste os outros limites para redistribuir.':'Monte o plano do mês para distribuir limites.'}
+$('#limcat').onchange=()=>{const item=S.lim.find(x=>x.categoria_id===$('#limcat').value);$('#limval').value=item?item.valor:'';atualizarBarra()};
+$('#limval').oninput=atualizarBarra;
+$('#limslider').oninput=()=>{$('#limval').value=$('#limslider').value;atualizarBarra()};
 
 function rFaturas(C){
  const L=$('#flist');L.replaceChildren();
@@ -305,6 +311,7 @@ function rFaturas(C){
 
 function rConfig(){
  const L=$('#cardlist');L.replaceChildren();
+ const F=$('#fixlist');F.replaceChildren();if(!S.fixas.length)F.append(h('p','mut','Nenhuma conta fixa cadastrada. Adicione uma abaixo.'));for(const x of S.fixas){const b=h('button','ghost',x.ativo?'Pausar':'Ativar');b.type='button';b.onclick=async()=>{b.disabled=true;const {error}=await db.from('despesas_fixas').update({ativo:!x.ativo}).eq('id',x.id).eq('grupo_id',group);if(error){toast('Não foi possível atualizar a conta.');b.disabled=false;return}toast('Conta atualizada.');await refresh()};F.append(h('div','row',h('span','',x.descricao+' · '+R(x.valor)+(x.ativo?'':' · pausada')),b))}
  if(!S.cards.length)L.append(h('p','mut','Nenhum cartão ainda.'));
  for(const c of S.cards)L.append(h('div','row',h('strong','',c.nome),h('small','','fecha dia '+c.fechamento+' · vence dia '+c.vencimento)));
 }
@@ -327,7 +334,8 @@ async function refresh(){
   db.from('planejamentos').select('*').eq('grupo_id',group).eq('mes',start).maybeSingle()]);
  const [profiles,settlements]=await Promise.all([db.from('perfis').select('user_id,nome').eq('grupo_id',group),db.from('acertos').select('mes,de,para,valor').eq('grupo_id',group).eq('mes',start)]);
  const [metas,aportes]=await Promise.all([db.from('metas').select('id,nome,emoji,valor_alvo,prazo').eq('grupo_id',group),db.from('aportes').select('meta_id,valor,data,reserva').eq('grupo_id',group)]);
- if([g,c,ca,l,p,profiles,settlements,metas,aportes].some(x=>x.error)){toast('Não foi possível atualizar. Confira se os SQL das fases 1 e 2 foram aplicados.');return}
+ const fix=await db.from('despesas_fixas').select('id,descricao,valor,ativo').eq('grupo_id',group).order('descricao');
+ if([g,c,ca,l,p,profiles,settlements,metas,aportes,fix].some(x=>x.error)){toast('Não foi possível atualizar. Confira a conexão.');return}S.fixas=fix.data;
  S.metas=metas.data;S.aportes=aportes.data;
  S.profiles=profiles.data;S.settlements=settlements.data;
  const fp=$('#fpessoa'),selected=fp.value;fp.replaceChildren(...[['','Todas as pessoas'],...S.profiles.map(x=>[x.user_id,x.nome])].map(([v,t])=>{const o=h('option','',t);o.value=v;return o}));fp.value=selected;S.person=fp.value;
@@ -349,6 +357,7 @@ function show(v){
 }
 $$('.nav [data-view]').forEach(b=>b.onclick=()=>show(b.dataset.view));
 $('#gear').onclick=()=>show('config');
+$('#fixform').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),nome=f.get('nome').trim();if(!nome){toast('Informe o nome da conta.');return}const b=e.target.querySelector('button');b.disabled=true;const {error}=await db.from('despesas_fixas').insert({grupo_id:group,descricao:nome,valor:Number(f.get('valor'))});b.disabled=false;if(error){toast('Não foi possível salvar a conta fixa.');return}e.target.reset();toast('Conta fixa adicionada.');await refresh()};
 $('#abrirLimites').onclick=()=>show('limites');
 $('#novaMeta').onclick=()=>{$('#metaform').reset();$('#metadialog').showModal()};
 $('#metaform').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),nome=f.get('nome').trim();if(!nome){toast('Informe o nome da meta.');return}const b=e.target.querySelector('button[type=submit],button.wide');b.disabled=true;const {error}=await db.from('metas').insert({grupo_id:group,nome,emoji:f.get('emoji').trim()||'🌿',valor_alvo:Number(f.get('alvo')),prazo:f.get('prazo')});b.disabled=false;if(error){toast('Não foi possível salvar a meta.');return}$('#metadialog').close();toast('Meta salva.');await refresh()};
@@ -395,6 +404,7 @@ $('#planform').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.targ
 
 /* ---------- limites, categorias, cartões ---------- */
 $('#limitform').onsubmit=async e=>{e.preventDefault();
+ const C=calc(),val=Number($('#limval').value),others=S.lim.filter(x=>x.categoria_id!==$('#limcat').value).reduce((a,x)=>a+Number(x.valor),0);if(!S.plan){toast('Crie o plano do mês antes de definir os limites.');return}if(others+val>Math.max(0,C.budget)+0.005){toast('O total dos limites ultrapassa o disponível. Reduza outro limite.');return}
  const {error}=await db.from('limites').upsert({grupo_id:group,categoria_id:$('#limcat').value,mes:mk()+'-01',valor:Number($('#limval').value)},{onConflict:'grupo_id,categoria_id,mes'});
  if(error){toast('Não foi possível salvar o limite.');return}
  $('#limval').value='';toast('Limite salvo.');await refresh();
