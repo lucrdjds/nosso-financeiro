@@ -74,6 +74,7 @@ dialog::backdrop{background:#0d223399}
 details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)}
 .err{color:var(--red);font-size:14px;margin-top:10px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+.home-intro{display:flex;align-items:end;justify-content:space-between;margin:8px 0 16px}.home-intro h1{font-size:24px;letter-spacing:-.7px}.home-intro p{font-size:13px;color:var(--mut)}.hero{background:linear-gradient(140deg,#102b3b,#14575c);box-shadow:0 12px 24px #163c4820}.home-card{background:white;border:1px solid #e6eef0;border-radius:20px;padding:17px;margin:10px 0;box-shadow:0 5px 20px #153b4808}.home-card .row{border:0;padding:0}.home-card .bar{height:10px;margin:14px 0}.home-card .figures{display:flex;justify-content:space-between;gap:10px;margin-top:12px}.home-card .figures span{display:block}.home-card .figures strong{font-size:16px;display:block}.home-card .weekly{margin-top:14px;padding:9px 12px;border-radius:11px;background:#eef8f7;color:#28665f;font-size:13px}.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}.quick-grid button{margin:0!important;font-size:13px;padding:12px 8px;background:#fff;border:1px solid #dce8e8;color:#155c58}.home-card .action{margin:12px 0 0;padding:8px 10px;min-height:38px;font-size:12px}.home-title{display:flex;justify-content:space-between;align-items:center;gap:10px}.home-title h2{margin:0}.home-title button{min-height:38px;font-size:12px;padding:8px 12px}.hero .explain{font-size:12px;margin-top:12px;color:#c2d6d9}.home-unset{color:#6b7c88;font-size:13px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js" defer></script></head>
 <body>
@@ -197,7 +198,7 @@ function calc(){
 
 /* ---------- telas ---------- */
 function rInicio(C){
- const el=$('#v-inicio');el.replaceChildren();const P=S.plan;
+ const el=$('#v-inicio');el.replaceChildren();const P=S.plan;el.append(h('div','home-intro',h('div','',h('p','','FINANÇAS DO CASAL'),h('h1','','Olá! 👋'),h('p','','Acompanhe o mês de um jeito simples.'))));
  const dim=new Date(S.y,S.mo+1,0).getDate(),isCur=now.getFullYear()===S.y&&now.getMonth()===S.mo;
  const day=isCur?now.getDate():(new Date(S.y,S.mo,1)<now?dim:0);
  const hero=h('div','hero');
@@ -211,17 +212,22 @@ function rInicio(C){
   const pct=C.budget>0?used/C.budget:(used>0?1:0),tp=day/dim;
   const tr=h('div','track'),fill=h('i',pct>1?'over':(isCur&&pct>tp+.1?'warn':''));fill.style.width=Math.min(100,pct*100)+'%';tr.append(fill);
   if(isCur){const mk2=h('b');mk2.style.left=tp*100+'%';tr.append(mk2)}
-  hero.append(tr,h('small','','Usaram '+Math.round(pct*100)+'% do que podiam gastar'+(isCur?' · passou '+Math.round(tp*100)+'% do mês':'')));
+  hero.append(tr,h('small','','Estimativa com base nos valores cadastrados'));
  }
- el.append(hero);
- const sec=h('div','sec',h('h2','','Onde seu dinheiro vai'));
- sec.append(h('p','mut','Acompanhe o valor das compras feitas neste mês. Compras parceladas contam pelo valor total na data da compra.'));
- if(!S.lim.length){sec.append(h('div','empty','Escolha um limite para cada categoria em Planejar. Acompanhe tudo aqui.'))}
- for(const c of S.cats){const l=S.lim.find(x=>x.categoria_id===c.id);if(!l)continue;const lim=Number(l.valor),spent=(C.buy[c.id]||0)/100,left=lim-spent;
- const card=h('div','lim',h('div','row',h('strong','',c.nome),mv(lim)));const bar=h('div','bar'),fill=h('i',left<0?'over':(lim>0&&spent>=lim*.8?'warn':''));fill.style.width=Math.min(100,lim>0?100*spent/lim:(spent>0?100:0))+'%';bar.append(fill);
- card.append(bar,h('div','row',h('small','','Já gastaram'),mv(spent)),h('div','row',h('small','',left>=0?'Ainda tem':'Passou do limite'),mv(Math.abs(left))),h('small','mut','Por semana, como referência: '),mv(lim/4),h('small','mut',' (limite mensal ÷ 4).'));sec.append(card)}
- if(!S.lim.length){const help=h('div','note','Sugestão inicial para ajustar: mercado R$ 1.400/mês e lazer R$ 300/mês. São metas sugeridas, não valores cadastrados. Almoço e transporte de trabalho precisam de limites próprios.');sec.append(help)}const btn=h('button','ghost wide','Organizar meu mês');btn.onclick=()=>show('limites');sec.append(btn);el.append(sec);
- const metaslink=h('button','ghost wide','Ver metas de economia');metaslink.onclick=()=>show('metas');el.append(metaslink);const pagar=h('button','ghost wide','Ver contas a pagar');pagar.onclick=()=>show('contas');el.append(pagar);const link=h('button','ghost wide','Ver detalhes da renda e gastos');link.onclick=()=>show('detalhes');el.append(link);
+ hero.append(h('p','explain','A fatura total informada deve excluir compras já lançadas, para não contar duas vezes.'));el.append(hero);
+ const quick=h('div','quick-grid');const q1=h('button','','Organizar o mês');q1.onclick=()=>show('limites');const q2=h('button','','Contas a pagar');q2.onclick=()=>show('contas');quick.append(q1,q2);el.append(quick);
+ const sec=h('div','sec'),head=h('div','home-title',h('h2','','Seus limites'));const edit=h('button','ghost','Editar');edit.onclick=()=>show('limites');head.append(edit);sec.append(head,h('p','mut','Quanto já foi e quanto ainda resta em cada categoria.'));
+ const cards=S.cats.filter(c=>S.lim.some(l=>l.categoria_id===c.id));
+ if(!cards.length){sec.append(h('div','empty','Ainda não há limites neste mês. Toque em Editar para escolher as categorias.'))}
+ for(const c of cards){const l=S.lim.find(x=>x.categoria_id===c.id),lim=Number(l.valor),spent=(C.buy[c.id]||0)/100,left=lim-spent;const card=h('div','home-card');
+ card.append(h('div','row',h('strong','',c.nome),h('small','','Limite ',mv(lim))));
+ const bar=h('div','bar'),fill=h('i',left<0?'over':(lim>0&&spent>=lim*.8?'warn':''));fill.style.width=Math.min(100,lim>0?100*spent/lim:(spent>0?100:0))+'%';bar.append(fill);card.append(bar);
+ const figures=h('div','figures',h('span','',h('small','','Gasto no mês'),h('strong','',mv(spent))),h('span','',h('small','',left>=0?'Ainda resta':'Acima do limite'),h('strong','',mv(Math.abs(left)))));card.append(figures);
+ card.append(h('div','weekly','Referência por semana: ',mv(lim/4),' · limite mensal dividido por 4'));
+ const adjust=h('button','ghost action','Ajustar limite');adjust.onclick=()=>{show('limites');$('#limcat').value=c.id;$('#limval').value=l.valor;atualizarBarra();$('#limval').focus()};card.append(adjust);sec.append(card)}
+ sec.append(h('p','mut','Compras parceladas aparecem pelo valor total no mês da compra. Referência semanal não é o gasto real da semana.'));
+ el.append(sec);
+ const more=h('button','ghost wide','Ver resumo completo');more.onclick=()=>show('detalhes');el.append(more);
  const details=$('#v-detalhes');details.replaceChildren(h('div','sec',h('h2','','Detalhes do mês')));const back=h('button','ghost wide','Voltar ao início');back.onclick=()=>show('inicio');details.append(back);
  const al=[];
  for(const c of S.cats){const l=S.lim.find(x=>x.categoria_id===c.id);if(!l)continue;const s=(C.buy[c.id]||0)/100,v=+l.valor;
