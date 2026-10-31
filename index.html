@@ -136,7 +136,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
  <label>Valor (R$)<input class="amt" name="value" type="number" min="0.01" step="0.01" required inputmode="decimal" placeholder="0,00"></label>
  <label>Com o que você gastou?<input name="description" required maxlength="200" placeholder="Ex.: Mercado da semana"></label>
  <label>Categoria</label><div class="chips" id="catchips"></div>
- <label>Como pagou? (opcional)</label><div class="chips" id="paychips"></div>
+ <label>Como pagou?</label><div class="chips" id="paychips"></div><p id="payinfo" class="mut" aria-live="polite"></p><button id="goCards" type="button" class="ghost" hidden>Cadastrar cartão</button>
  <label>Quem pagou?</label><div class="chips" id="payerchips"></div>
  <div id="splitchips" hidden></div><div id="pctwrap" hidden><input name="pct" type="number" value="50"></div>
  <div id="instwrap" hidden><label>Parcelas<input name="installments" type="number" min="1" max="120" value="1"></label><p id="instprev" class="mut"></p></div>
@@ -197,7 +197,8 @@ function calc(){
   for(let i=0;i<n;i++){const a=Math.floor(c/n)+(i<c%n?1:0);b[f+i]=(b[f+i]||0)+a;if(f+i===t)cardC+=a}
  }
  const P=S.plan,fixas=S.fixas.filter(x=>x.ativo).reduce((a,x)=>a+Number(x.valor),0),extra=S.aportes.filter(x=>x.data.slice(0,7)===k&&!x.reserva).reduce((a,x)=>a+Number(x.valor),0),budget=P?Number(P.renda)-Number(P.fixos)-fixas-Number(P.fatura_anterior)-Number(P.reserva)-extra:0;
- return{cash,cardC,buy,bills,budget,sobra:P?budget-(cash+cardC)/100:null};
+ const limitBudget=P?Number(P.renda)-Number(P.fixos)-fixas-Number(P.reserva)-extra:0;
+ return{cash,cardC,buy,bills,budget,limitBudget,sobra:P?budget-(cash+cardC)/100:null};
 }
 
 /* ---------- telas ---------- */
@@ -218,7 +219,8 @@ function rInicio(C){
   if(isCur){const mk2=h('b');mk2.style.left=tp*100+'%';tr.append(mk2)}
   hero.append(tr,h('small','','Estimativa com base nos valores cadastrados'));
  }
- if(P){const total=S.lim.reduce((a,x)=>a+Number(x.valor),0),projection=C.budget-total;hero.append(h('p','explain',projection>=0?'Se usarem 100% dos limites: sobrariam ':'Se usarem 100% dos limites: faltariam ',mv(Math.abs(projection))),h('small','','Previsão do plano: não inclui gastos sem limite ou valores que ultrapassem os limites. Parcelas podem cair em outro mês.'));}hero.append(h('p','explain','A fatura total informada deve excluir compras já lançadas, para não contar duas vezes.'));el.append(hero);
+ hero.append(h('p','explain','Saldo previsto para pagamentos deste mês. Não é o saldo do banco. Compras no crédito podem vencer em outro mês.'),h('small','','A fatura informada no plano deve excluir parcelas já lançadas no app.'));el.append(hero);
+ const t=S.y*12+S.mo,next=t+1,nextTotal=Object.values(C.bills).reduce((a,b)=>a+(b[next]||0),0)/100;const view=h('div','sec',h('h2','','Compras e pagamentos'),h('div','row',h('span','','Comprado neste mês'),mv(Object.values(C.buy).reduce((a,b)=>a+b,0)/100)),h('div','row',h('span','','Cartões com vencimento neste mês'),mv(C.cardC/100)),h('div','row',h('span','','PIX, débito ou dinheiro neste mês'),mv(C.cash/100)),h('div','row',h('span','','Cartões previstos para '+MES(Math.floor(next/12),next%12)),mv(nextTotal)),h('p','mut','Valores de cartões consideram só compras lançadas. Faturas informadas no plano são separadas. Confira o fechamento; compras parceladas afetam meses diferentes.'));if(!S.cards.length){view.append(h('p','mut','Nenhum cartão cadastrado. Cadastre um para prever quando cada compra será paga.'));const b=h('button','ghost','Cadastrar cartão');b.onclick=()=>show('config');view.append(b)}el.append(view);
  const quick=h('div','quick-grid');const q1=h('button','','Organizar o mês');q1.onclick=()=>show('limites');const q2=h('button','','Contas a pagar');q2.onclick=()=>show('contas');quick.append(q1,q2);el.append(quick);
  const sec=h('div','sec'),head=h('div','home-title',h('h2','','Seus limites'));const edit=h('button','ghost','Editar');edit.onclick=()=>show('limites');head.append(edit);sec.append(head,h('p','mut','Quanto já foi e quanto ainda resta em cada categoria.'));
  const cards=S.cats.filter(c=>S.lim.some(l=>l.categoria_id===c.id));
@@ -306,16 +308,16 @@ function rLimites(C){
  atualizarBarra();
 }
 function atualizarBarra(){
- const cat=$('#limcat').value,other=S.lim.filter(x=>x.categoria_id!==cat).reduce((a,x)=>a+Number(x.valor),0),current=Number(S.lim.find(x=>x.categoria_id===cat)?.valor||0),raw=$('#limval').value,val=raw===''?current:Number(raw)||0,budget=calc().budget,max=Math.max(0,budget-other),total=other+val,delta=budget-total;
+ const cat=$('#limcat').value,other=S.lim.filter(x=>x.categoria_id!==cat).reduce((a,x)=>a+Number(x.valor),0),current=Number(S.lim.find(x=>x.categoria_id===cat)?.valor||0),raw=$('#limval').value,val=raw===''?current:Number(raw)||0,budget=calc().limitBudget,max=Math.max(0,budget-other),total=other+val,delta=budget-total;
  const slider=$('#limslider'),recuperacao=current>max+0.005;
  // Um limite já salvo acima do máximo continua acessível para reduzi-lo.
  slider.max=String(recuperacao?current:max);slider.value=String(Math.max(0,Math.min(Number(slider.max),val)));slider.disabled=!S.plan||Number(slider.max)<=0;
- $('#limsliderinfo').textContent=!S.plan?'Defina o plano para habilitar a barra.':(recuperacao?'Máximo que cabe nesta categoria: '+R(max)+'. O limite já salvo está acima; use a barra para diminuí-lo.':'Máximo para esta categoria: '+R(max)+'; os outros limites já foram descontados.');
+ $('#limsliderinfo').textContent=!S.plan?'Defina o plano para habilitar a barra.':(recuperacao?'Máximo nesta referência: '+R(max)+'. O limite já salvo está acima; use a barra para diminuí-lo.':'Máximo nesta referência para esta categoria: '+R(max)+'; os outros limites já foram descontados.');
  const box=$('#limresumo');box.replaceChildren();
  if(!S.plan){box.append(h('strong','','Defina seu plano do mês'),h('p','','Informe renda, contas, fatura e reserva para calcular quanto pode distribuir.'));$('#limpreview').textContent='Monte o plano do mês para distribuir limites.';return}
- const P=S.plan,fixas=S.fixas.filter(x=>x.ativo).reduce((a,x)=>a+Number(x.valor),0),aportes=S.aportes.filter(x=>x.data.slice(0,7)===mk()&&!x.reserva).reduce((a,x)=>a+Number(x.valor),0),deducoes=Number(P.fixos)+fixas+Number(P.fatura_anterior)+Number(P.reserva)+aportes;
- box.append(h('strong','','Disponível após os compromissos: '+R(budget)),h('p','','Renda '+R(P.renda)+' − contas, fatura, reserva e aportes '+R(deducoes)),h('p','','Limites planejados: '+R(total)),h('strong','',delta>=0?'Sobra se gastar todos os limites: '+R(delta):'Falta para cobrir os limites: '+R(-delta)),h('p','mut','Estimativa com o valor digitado; salve para aplicar. Os limites não são gastos realizados.'));
- $('#limpreview').textContent=delta>=0?'Você ainda pode distribuir '+R(delta)+' entre as categorias.':'Reduza os limites em '+R(-delta)+' para caber no valor disponível.';
+ const P=S.plan,fixas=S.fixas.filter(x=>x.ativo).reduce((a,x)=>a+Number(x.valor),0),aportes=S.aportes.filter(x=>x.data.slice(0,7)===mk()&&!x.reserva).reduce((a,x)=>a+Number(x.valor),0),deducoes=Number(P.fixos)+fixas+Number(P.reserva)+aportes;
+ box.append(h('strong','','Referência para limites de compras: '+R(budget)),h('p','','Renda '+R(P.renda)+' − contas fixas, reserva e aportes '+R(deducoes)),h('p','','Limites planejados: '+R(total)),h('strong','',delta>=0?'Ainda não distribuído: '+R(delta):'Acima da referência: '+R(-delta)),h('p','mut','Esta referência NÃO é a sobra do mês nem garante que as faturas futuras caibam na renda. Os limites representam compras; o pagamento depende do cartão e das parcelas.'));
+ $('#limpreview').textContent=delta>=0?'Você ainda pode distribuir '+R(delta)+' entre as categorias.':'Reduza os limites em '+R(-delta)+' para caber na referência.';
 }
 $('#limcat').onchange=()=>{const item=S.lim.find(x=>x.categoria_id===$('#limcat').value);$('#limval').value=item?item.valor:'';atualizarBarra()};
 $('#limval').oninput=atualizarBarra;
@@ -409,16 +411,19 @@ function instPrev(){const f=$('#expense'),n=Number(f.installments.value),v=Numbe
 $('#addbtn').onclick=()=>{
  const f=$('#expense');f.reset();$('#expmsg').textContent='';f.date.value=today();
  $('#catchips').replaceChildren(...S.cats.map((c,i)=>chip('category',c.id,c.nome,false)));
- $('#paychips').replaceChildren(chip('card','','PIX/débito/dinheiro',true),...S.cards.map(c=>chip('card',c.id,c.nome,false)));
+ $('#paychips').replaceChildren(chip('card','','PIX/débito/dinheiro',false),...S.cards.map(c=>chip('card',c.id,'Crédito · '+c.nome,false)));$('#goCards').hidden=!!S.cards.length;$('#payinfo').textContent=S.cards.length?'Escolha como pagou para ver quando será pago.':'Nenhum cartão cadastrado. Cadastre um para lançar no crédito.';
  $('#payerchips').replaceChildren(...S.profiles.map(p=>chip('payer',p.user_id,p.nome,p.user_id===userId)));
  $('#splitchips').replaceChildren(...[['igual','50/50'],['so_eu','Só quem pagou'],['so_parceiro','Só a outra pessoa'],['percentual','Personalizado']].map(([v,t])=>chip('split',v,t,v==='igual')));$('#pctwrap').hidden=true;
  $('#instwrap').hidden=true;instPrev();$('#sheet').showModal();f.value.focus();
 };
-$('#paychips').onchange=()=>{const f=$('#expense'),card=f.card.value;$('#instwrap').hidden=!card;if(!card)f.installments.value=1;instPrev()};
+function pagamentoPrev(){const f=$('#expense'),fd=new FormData(f),choice=fd.get('card'),card=S.cards.find(c=>c.id===choice),date=fd.get('date');if(choice===null){$('#payinfo').textContent='Escolha como pagou.';return}if(!card){$('#payinfo').textContent='PIX, débito ou dinheiro: desconta do mês da compra.';return}if(!date){$('#payinfo').textContent='Informe a data para ver a fatura.';return}const [y,m,d]=date.split('-').map(Number),n=y*12+m-1+(d>card.fechamento?1:0)+(card.vencimento<=card.fechamento?1:0);$('#payinfo').textContent='Crédito '+card.nome+': primeira parcela prevista para '+MES(Math.floor(n/12),n%12)+'. Confira no banco.'}
+$('#goCards').onclick=()=>{$('#sheet').close();show('config');$('#cardForm').scrollIntoView({behavior:'smooth',block:'start'})};
+$('#paychips').onchange=()=>{const f=$('#expense'),card=new FormData(f).get('card');$('#instwrap').hidden=!card;if(!card)f.installments.value=1;instPrev();pagamentoPrev()};
 $('#splitchips').onchange=()=>{$('#pctwrap').hidden=new FormData($('#expense')).get('split')!=='percentual'};
-$('#expense').oninput=instPrev;
+$('#expense').oninput=()=>{instPrev();pagamentoPrev()};
 $('#expense').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);
  if(!f.get('category')){$('#expmsg').textContent='Escolha uma categoria.';return}
+ if(f.get('card')===null){$('#expmsg').textContent='Escolha como pagou.';return}
  if(!f.get('payer')){toast('Cadastre seu apelido e escolha quem pagou.');return}
  const {error}=await db.from('gastos').insert({grupo_id:group,categoria_id:f.get('category'),descricao:f.get('description').trim(),valor:Number(f.get('value')),data_compra:f.get('date'),cartao_id:f.get('card')||null,parcelas:f.get('card')?Number(f.get('installments')):1,observacao:f.get('note')||null,pago_por:f.get('payer'),divisao:f.get('split'),pct_pagador:Number(f.get('pct'))});
  if(error){$('#expmsg').textContent='Não foi possível salvar o gasto.';toast('Não foi possível salvar o gasto.');return}
@@ -435,7 +440,7 @@ $('#planform').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.targ
 
 /* ---------- limites, categorias, cartões ---------- */
 $('#limitform').onsubmit=async e=>{e.preventDefault();
- const C=calc(),val=Number($('#limval').value),others=S.lim.filter(x=>x.categoria_id!==$('#limcat').value).reduce((a,x)=>a+Number(x.valor),0);if(!S.plan){toast('Crie o plano do mês antes de definir os limites.');return}const previous=Number(S.lim.find(x=>x.categoria_id===$('#limcat').value)?.valor||0);if(!Number.isFinite(val)||val<0){toast('Informe um valor válido para o limite.');return}if(others+val>C.budget+0.005&&val>=previous){toast('Limites acima do disponível em '+R(others+val-C.budget)+'. Reduza este ou outro limite.');return}
+ const C=calc(),val=Number($('#limval').value),others=S.lim.filter(x=>x.categoria_id!==$('#limcat').value).reduce((a,x)=>a+Number(x.valor),0);if(!S.plan){toast('Crie o plano do mês antes de definir os limites.');return}const previous=Number(S.lim.find(x=>x.categoria_id===$('#limcat').value)?.valor||0);if(!Number.isFinite(val)||val<0){toast('Informe um valor válido para o limite.');return}if(others+val>C.limitBudget+0.005&&val>=previous){toast('Limites acima da referência em '+R(others+val-C.limitBudget)+'. Reduza este ou outro limite.');return}
  const {error}=await db.from('limites').upsert({grupo_id:group,categoria_id:$('#limcat').value,mes:mk()+'-01',valor:Number($('#limval').value)},{onConflict:'grupo_id,categoria_id,mes'});
  if(error){toast('Não foi possível salvar o limite.');return}
  $('#limval').value='';toast('Limite salvo.');await refresh();
