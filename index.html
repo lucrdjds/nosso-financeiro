@@ -212,13 +212,13 @@ function rInicio(C){
  }else{
   const neg=C.sobra<0,used=(C.cash+C.cardC)/100;
   hero.append(h('small','',neg?'Falta cobrir em '+MES(S.y,S.mo):'Sobra estimada em '+MES(S.y,S.mo)),h('div','big'+(neg?' neg':''),mv(Math.abs(C.sobra))));
-  if(isCur&&!neg){const left=dim-day+1;hero.append(h('p','',mv(C.sobra/left),' por dia até o fim do mês ('+left+(left===1?' dia)':' dias)')))}
+  if(isCur&&!neg&&dim-day+1>1){const left=dim-day+1;hero.append(h('p','',mv(C.sobra/left),' por dia até o fim do mês ('+left+' dias)'))}
   const pct=C.budget>0?used/C.budget:(used>0?1:0),tp=day/dim;
   const tr=h('div','track'),fill=h('i',pct>1?'over':(isCur&&pct>tp+.1?'warn':''));fill.style.width=Math.min(100,pct*100)+'%';tr.append(fill);
   if(isCur){const mk2=h('b');mk2.style.left=tp*100+'%';tr.append(mk2)}
   hero.append(tr,h('small','','Estimativa com base nos valores cadastrados'));
  }
- hero.append(h('p','explain','A fatura total informada deve excluir compras já lançadas, para não contar duas vezes.'));el.append(hero);
+ if(P){const total=S.lim.reduce((a,x)=>a+Number(x.valor),0),projection=C.budget-total;hero.append(h('p','explain',projection>=0?'Se usarem 100% dos limites: sobrariam ':'Se usarem 100% dos limites: faltariam ',mv(Math.abs(projection))),h('small','','Previsão do plano: não inclui gastos sem limite ou valores que ultrapassem os limites. Parcelas podem cair em outro mês.'));}hero.append(h('p','explain','A fatura total informada deve excluir compras já lançadas, para não contar duas vezes.'));el.append(hero);
  const quick=h('div','quick-grid');const q1=h('button','','Organizar o mês');q1.onclick=()=>show('limites');const q2=h('button','','Contas a pagar');q2.onclick=()=>show('contas');quick.append(q1,q2);el.append(quick);
  const sec=h('div','sec'),head=h('div','home-title',h('h2','','Seus limites'));const edit=h('button','ghost','Editar');edit.onclick=()=>show('limites');head.append(edit);sec.append(head,h('p','mut','Quanto já foi e quanto ainda resta em cada categoria.'));
  const cards=S.cats.filter(c=>S.lim.some(l=>l.categoria_id===c.id));
@@ -305,7 +305,7 @@ function rLimites(C){
  const keep=$('#limcat').value;$('#limcat').replaceChildren(...S.cats.map(c=>{const o=h('option','',c.nome);o.value=c.id;return o}));if(keep)$('#limcat').value=keep;
  atualizarBarra();
 }
-function atualizarBarra(){const cat=$('#limcat').value,other=S.lim.filter(x=>x.categoria_id!==cat).reduce((a,x)=>a+Number(x.valor),0),max=S.plan?Math.max(100,calc().budget,Number($('#limval').value)||0):0;$('#limslider').max=String(max);$('#limslider').value=String(Math.min(max,Number($('#limval').value)||0));$('#limpreview').textContent=S.plan?'Ao distribuir acima do disponível, o app mostrará o excesso.':'Monte o plano do mês para distribuir limites.'}
+function atualizarBarra(){const cat=$('#limcat').value,other=S.lim.filter(x=>x.categoria_id!==cat).reduce((a,x)=>a+Number(x.valor),0),val=Number($('#limval').value)||0,budget=calc().budget,max=Math.max(0,budget-other),current=Number(S.lim.find(x=>x.categoria_id===cat)?.valor||0);$('#limslider').max=String(Math.max(max,current,0));$('#limslider').value=String(Math.min(Number($('#limslider').max),val));const delta=budget-other-val;$('#limpreview').textContent=!S.plan?'Monte o plano do mês para distribuir limites.':(delta>=0?'Após salvar, sobrariam '+R(delta)+' para distribuir.':'Os limites excedem o disponível em '+R(-delta)+'. Reduza este ou outros limites.');}
 $('#limcat').onchange=()=>{const item=S.lim.find(x=>x.categoria_id===$('#limcat').value);$('#limval').value=item?item.valor:'';atualizarBarra()};
 $('#limval').oninput=atualizarBarra;
 $('#limslider').oninput=()=>{$('#limval').value=$('#limslider').value;atualizarBarra()};
@@ -424,7 +424,7 @@ $('#planform').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.targ
 
 /* ---------- limites, categorias, cartões ---------- */
 $('#limitform').onsubmit=async e=>{e.preventDefault();
- const C=calc(),val=Number($('#limval').value),others=S.lim.filter(x=>x.categoria_id!==$('#limcat').value).reduce((a,x)=>a+Number(x.valor),0);if(!S.plan){toast('Crie o plano do mês antes de definir os limites.');return}if(others+val>Math.max(0,C.budget)+0.005)toast('Atenção: os limites estão acima do valor disponível no plano.');
+ const C=calc(),val=Number($('#limval').value),others=S.lim.filter(x=>x.categoria_id!==$('#limcat').value).reduce((a,x)=>a+Number(x.valor),0);if(!S.plan){toast('Crie o plano do mês antes de definir os limites.');return}const previous=Number(S.lim.find(x=>x.categoria_id===$('#limcat').value)?.valor||0);if(!Number.isFinite(val)||val<0){toast('Informe um valor válido para o limite.');return}if(others+val>C.budget+0.005&&val>=previous){toast('Limites acima do disponível em '+R(others+val-C.budget)+'. Reduza este ou outro limite.');return}
  const {error}=await db.from('limites').upsert({grupo_id:group,categoria_id:$('#limcat').value,mes:mk()+'-01',valor:Number($('#limval').value)},{onConflict:'grupo_id,categoria_id,mes'});
  if(error){toast('Não foi possível salvar o limite.');return}
  $('#limval').value='';toast('Limite salvo.');await refresh();
