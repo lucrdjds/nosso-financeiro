@@ -91,7 +91,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
   <div class="mnav"><button class="ib" id="prev" aria-label="Mês anterior"><i data-i="l"></i></button><span id="mlabel"></span><button class="ib" id="next" aria-label="Próximo mês"><i data-i="r"></i></button></div>
   <div><button class="ib" id="eye" aria-label="Ocultar ou mostrar valores"><i data-i="eye"></i></button><button class="ib" id="gear" aria-label="Ajustes"><i data-i="gear"></i></button></div>
  </div>
- <p id="status" class="mut"></p><div class="note"><strong>Versão de teste.</strong> Confira os resultados antes de tomar decisões financeiras. Os acertos e o uso da reserva em metas estão temporariamente indisponíveis.</div>
+ <p id="status" class="mut"></p><div class="note"><strong>Versão de teste.</strong> A fatura informada é um total separado: não some novamente compras já incluídas. Confira os resultados antes de tomar decisões financeiras.</div>
  <div id="ws" hidden>
   <section id="v-inicio"></section><section id="v-contas" hidden><div class="sec"><h2>Contas a pagar</h2><p class="mut">Lista de acompanhamento do mês selecionado. Marcar como pago não altera os cálculos. Para evitar repetição, informe os valores no plano ou nas contas fixas apenas uma vez.</p><div id="contaslist"></div><form id="contaform"><label>Nome<input name="nome" required maxlength="100" placeholder="Ex.: PicPay, Celesc, aluguel"></label><label>Valor em reais<input name="valor" type="number" min="0" step="0.01" required></label><label>Vencimento (opcional)<input name="vencimento" type="date"></label><button class="wide">Adicionar conta</button></form><button class="ghost wide" id="contasvoltar" type="button">Voltar ao planejamento</button></div></section><section id="v-detalhes" hidden></section>
   <section id="v-metas" hidden><div class="sec"><h2>Metas do casal</h2><p class="mut">Acompanhem os sonhos e o dinheiro guardado para cada um.</p><button class="wide" id="novaMeta">Criar meta</button></div><div id="metalist"></div><button class="ghost wide" id="abrirLimites">Ver limites por categoria</button></section>
@@ -102,7 +102,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
    <div id="glist"></div>
   </section>
   <section id="v-limites" hidden>
-   <div class="sec" style="margin-top:0"><h2>Planejar o mês</h2><p class="mut">Organize seu mês em três passos: 1. renda, fatura e reserva; 2. contas fixas; 3. limites das categorias.</p><button type="button" class="ghost wide" id="abrirPlano">1. Definir renda, fatura e reserva</button><button type="button" class="ghost wide" id="abrirContas">2. Cadastrar contas fixas</button><button type="button" class="ghost wide" id="abrirPagamentos">Acompanhar contas a pagar</button><p class="mut">Os limites contam o valor total das compras feitas no mês, inclusive parceladas.</p></div>
+   <div class="sec" style="margin-top:0"><h2>Organizar meu mês</h2><p class="mut">1. Salário, fatura e valor para guardar. 2. Contas fixas. 3. Escolha os limites que fazem sentido para vocês.</p><button type="button" class="ghost wide" id="abrirPlano">1. Definir renda, fatura e reserva</button><button type="button" class="ghost wide" id="abrirContas">2. Cadastrar contas fixas</button><button type="button" class="ghost wide" id="abrirPagamentos">Acompanhar contas a pagar</button><p class="mut">Os limites contam o valor total das compras feitas no mês, inclusive parceladas.</p></div>
    <div id="llist"></div>
    <div class="note" id="limresumo"></div><form id="limitform"><label>Categoria<select id="limcat" required></select></label><label>Limite do mês (R$)<input id="limval" type="number" min="0" step="0.01" required inputmode="decimal"></label><label>Ajuste pela barra<input id="limslider" type="range" min="0" max="10000" step="10" value="0"></label><p id="limpreview" class="mut"></p><button class="wide">Salvar limite</button></form>
   </section>
@@ -126,7 +126,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
  <button data-view="inicio"><i data-i="home"></i>Início</button>
  <button data-view="gastos"><i data-i="list"></i>Gastos</button>
  <button class="add" id="addbtn" aria-label="Lançar gasto"><i data-i="plus"></i></button>
- <button data-view="metas"><i data-i="target"></i>Metas</button>
+ <button data-view="limites"><i data-i="target"></i>Planejar</button>
  <button data-view="faturas"><i data-i="card"></i>Faturas</button>
 </nav>
 
@@ -135,7 +135,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
  <label>Valor (R$)<input class="amt" name="value" type="number" min="0.01" step="0.01" required inputmode="decimal" placeholder="0,00"></label>
  <label>Com o que você gastou?<input name="description" required maxlength="200" placeholder="Ex.: Mercado da semana"></label>
  <label>Categoria</label><div class="chips" id="catchips"></div>
- <label>Como pagou?</label><div class="chips" id="paychips"></div>
+ <label>Como pagou? (opcional)</label><div class="chips" id="paychips"></div>
  <label>Quem pagou?</label><div class="chips" id="payerchips"></div>
  <div id="splitchips" hidden></div><div id="pctwrap" hidden><input name="pct" type="number" value="50"></div>
  <div id="instwrap" hidden><label>Parcelas<input name="installments" type="number" min="1" max="120" value="1"></label><p id="instprev" class="mut"></p></div>
@@ -214,14 +214,14 @@ function rInicio(C){
   hero.append(tr,h('small','','Usaram '+Math.round(pct*100)+'% do que podiam gastar'+(isCur?' · passou '+Math.round(tp*100)+'% do mês':'')));
  }
  el.append(hero);
- const sec=h('div','sec',h('h2','','Seus limites do mês'));
+ const sec=h('div','sec',h('h2','','Onde seu dinheiro vai'));
  sec.append(h('p','mut','Acompanhe o valor das compras feitas neste mês. Compras parceladas contam pelo valor total na data da compra.'));
- if(!S.lim.length){sec.append(h('div','empty','Ainda não há limites definidos. Toque em Planejar para criar seus limites.'))}
+ if(!S.lim.length){sec.append(h('div','empty','Escolha um limite para cada categoria em Planejar. Acompanhe tudo aqui.'))}
  for(const c of S.cats){const l=S.lim.find(x=>x.categoria_id===c.id);if(!l)continue;const lim=Number(l.valor),spent=(C.buy[c.id]||0)/100,left=lim-spent;
  const card=h('div','lim',h('div','row',h('strong','',c.nome),mv(lim)));const bar=h('div','bar'),fill=h('i',left<0?'over':(lim>0&&spent>=lim*.8?'warn':''));fill.style.width=Math.min(100,lim>0?100*spent/lim:(spent>0?100:0))+'%';bar.append(fill);
- card.append(bar,h('div','row',h('small','','Já gastaram'),mv(spent)),h('div','row',h('small','',left>=0?'Ainda tem':'Passou do limite'),mv(Math.abs(left))),h('small','mut','Referência semanal: '),mv(lim/4),h('small','mut',' por semana (limite mensal dividido por 4).'));sec.append(card)}
- const btn=h('button','ghost wide','Planejar limites');btn.onclick=()=>show('limites');sec.append(btn);el.append(sec);
- const pagar=h('button','ghost wide','Ver contas a pagar');pagar.onclick=()=>show('contas');el.append(pagar);const link=h('button','ghost wide','Ver detalhes da renda e gastos');link.onclick=()=>show('detalhes');el.append(link);
+ card.append(bar,h('div','row',h('small','','Já gastaram'),mv(spent)),h('div','row',h('small','',left>=0?'Ainda tem':'Passou do limite'),mv(Math.abs(left))),h('small','mut','Por semana, como referência: '),mv(lim/4),h('small','mut',' (limite mensal ÷ 4).'));sec.append(card)}
+ if(!S.lim.length){const help=h('div','note','Sugestão inicial para ajustar: mercado R$ 1.400/mês e lazer R$ 300/mês. São metas sugeridas, não valores cadastrados. Almoço e transporte de trabalho precisam de limites próprios.');sec.append(help)}const btn=h('button','ghost wide','Organizar meu mês');btn.onclick=()=>show('limites');sec.append(btn);el.append(sec);
+ const metaslink=h('button','ghost wide','Ver metas de economia');metaslink.onclick=()=>show('metas');el.append(metaslink);const pagar=h('button','ghost wide','Ver contas a pagar');pagar.onclick=()=>show('contas');el.append(pagar);const link=h('button','ghost wide','Ver detalhes da renda e gastos');link.onclick=()=>show('detalhes');el.append(link);
  const details=$('#v-detalhes');details.replaceChildren(h('div','sec',h('h2','','Detalhes do mês')));const back=h('button','ghost wide','Voltar ao início');back.onclick=()=>show('inicio');details.append(back);
  const al=[];
  for(const c of S.cats){const l=S.lim.find(x=>x.categoria_id===c.id);if(!l)continue;const s=(C.buy[c.id]||0)/100,v=+l.valor;
@@ -414,7 +414,7 @@ $('#planform').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.targ
 
 /* ---------- limites, categorias, cartões ---------- */
 $('#limitform').onsubmit=async e=>{e.preventDefault();
- const C=calc(),val=Number($('#limval').value),others=S.lim.filter(x=>x.categoria_id!==$('#limcat').value).reduce((a,x)=>a+Number(x.valor),0);if(!S.plan){toast('Crie o plano do mês antes de definir os limites.');return}if(others+val>Math.max(0,C.budget)+0.005&&!confirm('Os limites ultrapassam o disponível em '+R(others+val-Math.max(0,C.budget))+'. Salvar mesmo assim?'))return;
+ const C=calc(),val=Number($('#limval').value),others=S.lim.filter(x=>x.categoria_id!==$('#limcat').value).reduce((a,x)=>a+Number(x.valor),0);if(!S.plan){toast('Crie o plano do mês antes de definir os limites.');return}if(others+val>Math.max(0,C.budget)+0.005)toast('Atenção: os limites estão acima do valor disponível no plano.');
  const {error}=await db.from('limites').upsert({grupo_id:group,categoria_id:$('#limcat').value,mes:mk()+'-01',valor:Number($('#limval').value)},{onConflict:'grupo_id,categoria_id,mes'});
  if(error){toast('Não foi possível salvar o limite.');return}
  $('#limval').value='';toast('Limite salvo.');await refresh();
