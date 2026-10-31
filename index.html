@@ -105,7 +105,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
   <section id="v-limites" hidden>
    <div class="sec" style="margin-top:0"><h2>Organizar meu mês</h2><p class="mut">1. Salário, fatura e valor para guardar. 2. Contas fixas. 3. Escolha os limites que fazem sentido para vocês.</p><button type="button" class="ghost wide" id="abrirPlano">1. Definir renda, fatura e reserva</button><button type="button" class="ghost wide" id="abrirContas">2. Cadastrar contas fixas</button><button type="button" class="ghost wide" id="abrirPagamentos">Acompanhar contas a pagar</button><p class="mut">Os limites contam o valor total das compras feitas no mês, inclusive parceladas.</p></div>
    <div id="llist"></div>
-   <div class="note" id="limresumo"></div><form id="limitform"><label>Categoria<select id="limcat" required></select></label><label>Limite do mês (R$)<input id="limval" type="number" min="0" step="0.01" required inputmode="decimal"></label><label>Ajuste pela barra<input id="limslider" type="range" min="0" max="10000" step="10" value="0"></label><p id="limpreview" class="mut"></p><button class="wide">Salvar limite</button></form>
+   <div class="note" id="limresumo"></div><form id="limitform"><label>Categoria<select id="limcat" required></select></label><label>Limite do mês (R$)<input id="limval" type="number" min="0" step="0.01" required inputmode="decimal"></label><label>Ajuste pela barra<input id="limslider" type="range" min="0" max="0" step="0.01" value="0" aria-describedby="limsliderinfo"></label><p id="limsliderinfo" class="mut" aria-live="polite"></p><p id="limpreview" class="mut"></p><button class="wide">Salvar limite</button></form>
   </section>
   <section id="v-faturas" hidden>
    <div class="sec" style="margin-top:0"><h2>Faturas previstas</h2><p class="mut">Estimativa feita só com as compras lançadas aqui. Confirme datas e valores no banco.</p></div>
@@ -307,7 +307,10 @@ function rLimites(C){
 }
 function atualizarBarra(){
  const cat=$('#limcat').value,other=S.lim.filter(x=>x.categoria_id!==cat).reduce((a,x)=>a+Number(x.valor),0),current=Number(S.lim.find(x=>x.categoria_id===cat)?.valor||0),raw=$('#limval').value,val=raw===''?current:Number(raw)||0,budget=calc().budget,max=Math.max(0,budget-other),total=other+val,delta=budget-total;
- $('#limslider').max=String(Math.max(max,current,0));$('#limslider').value=String(Math.min(Number($('#limslider').max),val));
+ const slider=$('#limslider'),recuperacao=current>max+0.005;
+ // Um limite já salvo acima do máximo continua acessível para reduzi-lo.
+ slider.max=String(recuperacao?current:max);slider.value=String(Math.max(0,Math.min(Number(slider.max),val)));slider.disabled=!S.plan||Number(slider.max)<=0;
+ $('#limsliderinfo').textContent=!S.plan?'Defina o plano para habilitar a barra.':(recuperacao?'Máximo que cabe nesta categoria: '+R(max)+'. O limite já salvo está acima; use a barra para diminuí-lo.':'Máximo para esta categoria: '+R(max)+'; os outros limites já foram descontados.');
  const box=$('#limresumo');box.replaceChildren();
  if(!S.plan){box.append(h('strong','','Defina seu plano do mês'),h('p','','Informe renda, contas, fatura e reserva para calcular quanto pode distribuir.'));$('#limpreview').textContent='Monte o plano do mês para distribuir limites.';return}
  const P=S.plan,fixas=S.fixas.filter(x=>x.ativo).reduce((a,x)=>a+Number(x.valor),0),aportes=S.aportes.filter(x=>x.data.slice(0,7)===mk()&&!x.reserva).reduce((a,x)=>a+Number(x.valor),0),deducoes=Number(P.fixos)+fixas+Number(P.fatura_anterior)+Number(P.reserva)+aportes;
