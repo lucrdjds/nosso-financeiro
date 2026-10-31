@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0d2233">
+<meta name="theme-color" content="#0d2233"><link rel="manifest" href="./manifest.webmanifest">
 <title>Nosso Financeiro</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
@@ -78,7 +78,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js" defer></script></head>
 <body>
-<main>
+<main><div id="installBanner" class="note" hidden><strong>📱 Leve o Nosso Financeiro com você</strong><p>Adicione o app à tela inicial para acessar mais rápido.</p><button type="button" id="installBtn">Adicionar à tela inicial</button> <button type="button" class="ghost" id="installLater">Agora não</button></div>
 <section id="auth" class="auth" hidden>
  <h1>Nosso Financeiro</h1><p class="mut">Um plano para a vida a dois.</p>
  <div class="note"><strong>Versão de teste.</strong> Não cadastre dados financeiros reais ainda.</div>
@@ -162,6 +162,10 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
+let installRequest=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installRequest=e;const banner=document.getElementById('installBanner');if(banner&&!window.matchMedia('(display-mode: standalone)').matches)banner.hidden=false});
+window.addEventListener('appinstalled',()=>{installRequest=null;const b=document.getElementById('installBanner');if(b)b.hidden=true});
+window.addEventListener('DOMContentLoaded',()=>{const banner=document.getElementById('installBanner');document.getElementById('installBtn').onclick=async()=>{if(!installRequest)return;const prompt=installRequest;installRequest=null;banner.hidden=true;await prompt.prompt()};document.getElementById('installLater').onclick=()=>{banner.hidden=true};if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{})});
 window.addEventListener('DOMContentLoaded',()=>{
 if(!window.supabase){document.querySelector('#auth').hidden=false;document.querySelector('#authmsg').textContent='Não foi possível carregar a conexão. Confira sua internet.';return}
 const db=window.supabase.createClient('https://rdllsrsfcawmmyhxkvtj.supabase.co','sb_publishable_qWjlu9mv5aAye_RxZdX-NQ_WyTrcqAN');
