@@ -93,7 +93,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
  </div>
  <p id="status" class="mut"></p><div class="note"><strong>Versão de teste.</strong> Confira os resultados antes de tomar decisões financeiras. Os acertos e o uso da reserva em metas estão temporariamente indisponíveis.</div>
  <div id="ws" hidden>
-  <section id="v-inicio"></section><section id="v-detalhes" hidden></section>
+  <section id="v-inicio"></section><section id="v-contas" hidden><div class="sec"><h2>Contas a pagar</h2><p class="mut">Lista de acompanhamento do mês selecionado. Marcar como pago não altera os cálculos. Para evitar repetição, informe os valores no plano ou nas contas fixas apenas uma vez.</p><div id="contaslist"></div><form id="contaform"><label>Nome<input name="nome" required maxlength="100" placeholder="Ex.: PicPay, Celesc, aluguel"></label><label>Valor em reais<input name="valor" type="number" min="0" step="0.01" required></label><label>Vencimento (opcional)<input name="vencimento" type="date"></label><button class="wide">Adicionar conta</button></form><button class="ghost wide" id="contasvoltar" type="button">Voltar ao planejamento</button></div></section><section id="v-detalhes" hidden></section>
   <section id="v-metas" hidden><div class="sec"><h2>Metas do casal</h2><p class="mut">Acompanhem os sonhos e o dinheiro guardado para cada um.</p><button class="wide" id="novaMeta">Criar meta</button></div><div id="metalist"></div><button class="ghost wide" id="abrirLimites">Ver limites por categoria</button></section>
   <section id="v-gastos" hidden>
    <div class="sec" style="margin-top:0"><h2>Gastos do mês <span id="gsum" class="mut"></span></h2>
@@ -102,7 +102,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
    <div id="glist"></div>
   </section>
   <section id="v-limites" hidden>
-   <div class="sec" style="margin-top:0"><h2>Planejar o mês</h2><p class="mut">Primeiro informe renda, contas e quanto deseja guardar. Depois escolha quanto reservar para cada categoria.</p><button type="button" class="ghost wide" id="abrirPlano">Definir renda e compromissos</button><button type="button" class="ghost wide" id="abrirContas">Cadastrar contas fixas</button><p class="mut">Os limites contam o valor total das compras feitas no mês, inclusive parceladas.</p></div>
+   <div class="sec" style="margin-top:0"><h2>Planejar o mês</h2><p class="mut">Organize seu mês em três passos: 1. renda, fatura e reserva; 2. contas fixas; 3. limites das categorias.</p><button type="button" class="ghost wide" id="abrirPlano">1. Definir renda, fatura e reserva</button><button type="button" class="ghost wide" id="abrirContas">2. Cadastrar contas fixas</button><button type="button" class="ghost wide" id="abrirPagamentos">Acompanhar contas a pagar</button><p class="mut">Os limites contam o valor total das compras feitas no mês, inclusive parceladas.</p></div>
    <div id="llist"></div>
    <div class="note" id="limresumo"></div><form id="limitform"><label>Categoria<select id="limcat" required></select></label><label>Limite do mês (R$)<input id="limval" type="number" min="0" step="0.01" required inputmode="decimal"></label><label>Ajuste pela barra<input id="limslider" type="range" min="0" max="10000" step="10" value="0"></label><p id="limpreview" class="mut"></p><button class="wide">Salvar limite</button></form>
   </section>
@@ -176,7 +176,7 @@ const svg=n=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+IC[n]+'</svg>';
 $$('[data-i]').forEach(e=>e.outerHTML=svg(e.dataset.i));
 
 const now=new Date(),S={y:now.getFullYear(),mo:now.getMonth(),gastos:[],cats:[],cards:[],lim:[],plan:null,q:'',cat:''};
-let group=null,userId=null;S.profiles=[];S.settlements=[];S.metas=[];S.aportes=[];S.fixas=[];S.person='';let metaId=null;const mk=()=>S.y+'-'+pad(S.mo+1);
+let group=null,userId=null;S.contas=[];S.profiles=[];S.settlements=[];S.metas=[];S.aportes=[];S.fixas=[];S.person='';let metaId=null;const mk=()=>S.y+'-'+pad(S.mo+1);
 const today=()=>new Date().toLocaleDateString('en-CA');
 
 /* ---------- cálculo ---------- */
@@ -221,7 +221,7 @@ function rInicio(C){
  const card=h('div','lim',h('div','row',h('strong','',c.nome),mv(lim)));const bar=h('div','bar'),fill=h('i',left<0?'over':(lim>0&&spent>=lim*.8?'warn':''));fill.style.width=Math.min(100,lim>0?100*spent/lim:(spent>0?100:0))+'%';bar.append(fill);
  card.append(bar,h('div','row',h('small','','Já gastaram'),mv(spent)),h('div','row',h('small','',left>=0?'Ainda tem':'Passou do limite'),mv(Math.abs(left))),h('small','mut','Referência semanal: '),mv(lim/4),h('small','mut',' por semana (limite mensal dividido por 4).'));sec.append(card)}
  const btn=h('button','ghost wide','Planejar limites');btn.onclick=()=>show('limites');sec.append(btn);el.append(sec);
- const link=h('button','ghost wide','Ver detalhes da renda e gastos');link.onclick=()=>show('detalhes');el.append(link);
+ const pagar=h('button','ghost wide','Ver contas a pagar');pagar.onclick=()=>show('contas');el.append(pagar);const link=h('button','ghost wide','Ver detalhes da renda e gastos');link.onclick=()=>show('detalhes');el.append(link);
  const details=$('#v-detalhes');details.replaceChildren(h('div','sec',h('h2','','Detalhes do mês')));const back=h('button','ghost wide','Voltar ao início');back.onclick=()=>show('inicio');details.append(back);
  const al=[];
  for(const c of S.cats){const l=S.lim.find(x=>x.categoria_id===c.id);if(!l)continue;const s=(C.buy[c.id]||0)/100,v=+l.valor;
@@ -295,7 +295,7 @@ function rLimites(C){
  const keep=$('#limcat').value;$('#limcat').replaceChildren(...S.cats.map(c=>{const o=h('option','',c.nome);o.value=c.id;return o}));if(keep)$('#limcat').value=keep;
  atualizarBarra();
 }
-function atualizarBarra(){const cat=$('#limcat').value,other=S.lim.filter(x=>x.categoria_id!==cat).reduce((a,x)=>a+Number(x.valor),0),max=S.plan?Math.max(0,calc().budget-other):0;$('#limslider').max=String(max);$('#limslider').value=String(Math.min(max,Number($('#limval').value)||0));$('#limpreview').textContent=S.plan?'Máximo para esta categoria agora: '+R(max)+'. Ajuste os outros limites para redistribuir.':'Monte o plano do mês para distribuir limites.'}
+function atualizarBarra(){const cat=$('#limcat').value,other=S.lim.filter(x=>x.categoria_id!==cat).reduce((a,x)=>a+Number(x.valor),0),max=S.plan?Math.max(100,calc().budget,Number($('#limval').value)||0):0;$('#limslider').max=String(max);$('#limslider').value=String(Math.min(max,Number($('#limval').value)||0));$('#limpreview').textContent=S.plan?'Ao distribuir acima do disponível, o app mostrará o excesso.':'Monte o plano do mês para distribuir limites.'}
 $('#limcat').onchange=()=>{const item=S.lim.find(x=>x.categoria_id===$('#limcat').value);$('#limval').value=item?item.valor:'';atualizarBarra()};
 $('#limval').oninput=atualizarBarra;
 $('#limslider').oninput=()=>{$('#limval').value=$('#limslider').value;atualizarBarra()};
@@ -327,7 +327,7 @@ function rConfig(){
 function render(){
  const C=calc();$('#mlabel').textContent=MES(S.y,S.mo);
  const keep=$('#fcat').value;$('#fcat').replaceChildren(...[['','Todas'],...S.cats.map(c=>[c.id,c.nome])].map(([v,t])=>{const o=h('option','',t);o.value=v;return o}));$('#fcat').value=keep;S.cat=$('#fcat').value;
- rInicio(C);rGastos();rLimites(C);rFaturas(C);rConfig();rMetas();
+ rInicio(C);rGastos();rLimites(C);rFaturas(C);rConfig();rMetas();rContas();
 }
 function rMetas(){const L=$('#metalist');L.replaceChildren();if(!S.metas.length){L.append(h('div','empty','Nenhuma meta ainda. Toque em Criar meta para começar.'));return}for(const m of S.metas){const adds=S.aportes.filter(a=>a.meta_id===m.id),sum=adds.reduce((a,x)=>a+Number(x.valor),0),remain=Math.max(0,Number(m.valor_alvo)-sum),nowDate=new Date(),due=new Date(m.prazo+'T12:00'),months=Math.max(0,(due.getFullYear()-nowDate.getFullYear())*12+due.getMonth()-nowDate.getMonth()+1);const box=h('div','sec',h('h2','',(m.emoji||'🌿')+' '+m.nome));box.append(h('div','row',h('strong','', 'Guardado'),mv(sum)),h('p','mut','Falta '+R(remain)+' de '+R(m.valor_alvo)));const bar=h('div','bar'),i=h('i');i.style.width=Math.min(100,100*sum/Number(m.valor_alvo))+'%';bar.append(i);box.append(bar);box.append(h('p','mut',remain===0?'Meta alcançada!':months>0?'Para o prazo: '+R(remain/months)+' por mês ('+months+' meses, incluindo este).':'Prazo encerrado.'));if(adds.length&&sum>0&&remain>0){const first=adds.map(a=>a.data).sort()[0],d=new Date(first+'T12:00'),elapsed=Math.max(1,(nowDate.getFullYear()-d.getFullYear())*12+nowDate.getMonth()-d.getMonth()+1),rate=sum/elapsed,n=Math.ceil(remain/rate),eta=new Date(nowDate.getFullYear(),nowDate.getMonth()+n,1);box.append(h('p','mut','No ritmo médio desde o primeiro aporte: '+MES(eta.getFullYear(),eta.getMonth())+' (estimativa).'))}else if(remain>0)box.append(h('p','mut','A previsão de conclusão aparece após o primeiro aporte.'));const b=h('button','ghost wide','Registrar aporte');b.onclick=()=>{metaId=m.id;$('#aporteform').reset();$('#aporteform').elements.data.value=today();$('#aportemeta').textContent=m.nome;$('#aportedialog').showModal()};box.append(b);L.append(box)}}
 
@@ -342,8 +342,8 @@ async function refresh(){
   db.from('planejamentos').select('*').eq('grupo_id',group).eq('mes',start).maybeSingle()]);
  const [profiles,settlements]=await Promise.all([db.from('perfis').select('user_id,nome').eq('grupo_id',group),db.from('acertos').select('mes,de,para,valor').eq('grupo_id',group).eq('mes',start)]);
  const [metas,aportes]=await Promise.all([db.from('metas').select('id,nome,emoji,valor_alvo,prazo').eq('grupo_id',group),db.from('aportes').select('meta_id,valor,data,reserva').eq('grupo_id',group)]);
- const fix=await db.from('despesas_fixas').select('id,descricao,valor,ativo').eq('grupo_id',group).order('descricao');
- if([g,c,ca,l,p,profiles,settlements,metas,aportes,fix].some(x=>x.error)){toast('Não foi possível atualizar. Confira a conexão.');return}S.fixas=fix.data;
+ const contas=await db.from('contas_mensais').select('id,nome,valor,vencimento,pago').eq('grupo_id',group).eq('mes',start).order('vencimento',{ascending:true});const fix=await db.from('despesas_fixas').select('id,descricao,valor,ativo').eq('grupo_id',group).order('descricao');
+ if([g,c,ca,l,p,profiles,settlements,metas,aportes,fix,contas].some(x=>x.error)){toast('Não foi possível atualizar. Confira a conexão.');return}S.fixas=fix.data;S.contas=contas.data;
  S.metas=metas.data;S.aportes=aportes.data;
  S.profiles=profiles.data;S.settlements=settlements.data;
  const fp=$('#fpessoa'),selected=fp.value;fp.replaceChildren(...[['','Todas as pessoas'],...S.profiles.map(x=>[x.user_id,x.nome])].map(([v,t])=>{const o=h('option','',t);o.value=v;return o}));fp.value=selected;S.person=fp.value;
@@ -364,7 +364,9 @@ function show(v){
  window.scrollTo({top:0});
 }
 $$('.nav [data-view]').forEach(b=>b.onclick=()=>show(b.dataset.view));
-$('#gear').onclick=()=>show('config');$('#abrirPlano').onclick=openPlan;$('#abrirContas').onclick=()=>show('config');
+function rContas(){const L=$('#contaslist');L.replaceChildren();if(!S.contas.length)L.append(h('div','empty','Nenhuma conta nesta lista. Adicione abaixo para acompanhar os pagamentos.'));for(const x of S.contas){const b=h('button','ghost',x.pago?'Pago ✓':'Marcar como pago');b.type='button';b.onclick=async()=>{b.disabled=true;const {error}=await db.from('contas_mensais').update({pago:!x.pago}).eq('id',x.id).eq('grupo_id',group);if(error){toast('Não foi possível atualizar a conta.');b.disabled=false;return}toast(x.pago?'Conta marcada como pendente.':'Conta marcada como paga.');await refresh()};L.append(h('div','row',h('div','',h('strong','',x.nome),h('small','',(x.vencimento?'Vence '+x.vencimento.split('-').reverse().join('/')+' · ':'')+R(x.valor))),b))}}
+$('#contaform').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),nome=f.get('nome').trim();if(!nome){toast('Informe o nome da conta.');return}const b=e.target.querySelector('button');b.disabled=true;const {error}=await db.from('contas_mensais').insert({grupo_id:group,mes:mk()+'-01',nome,valor:Number(f.get('valor')),vencimento:f.get('vencimento')||null});b.disabled=false;if(error){toast('Não foi possível adicionar a conta.');return}e.target.reset();toast('Conta adicionada.');await refresh()};
+$('#abrirPagamentos').onclick=()=>show('contas');$('#contasvoltar').onclick=()=>show('limites');$('#gear').onclick=()=>show('config');$('#abrirPlano').onclick=openPlan;$('#abrirContas').onclick=()=>show('config');
 $('#fixform').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),nome=f.get('nome').trim();if(!nome){toast('Informe o nome da conta.');return}const b=e.target.querySelector('button');b.disabled=true;const {error}=await db.from('despesas_fixas').insert({grupo_id:group,descricao:nome,valor:Number(f.get('valor'))});b.disabled=false;if(error){toast('Não foi possível salvar a conta fixa.');return}e.target.reset();toast('Conta fixa adicionada.');await refresh()};
 $('#abrirLimites').onclick=()=>show('limites');
 $('#novaMeta').onclick=()=>{$('#metaform').reset();$('#metadialog').showModal()};
@@ -412,7 +414,7 @@ $('#planform').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.targ
 
 /* ---------- limites, categorias, cartões ---------- */
 $('#limitform').onsubmit=async e=>{e.preventDefault();
- const C=calc(),val=Number($('#limval').value),others=S.lim.filter(x=>x.categoria_id!==$('#limcat').value).reduce((a,x)=>a+Number(x.valor),0);if(!S.plan){toast('Crie o plano do mês antes de definir os limites.');return}if(others+val>Math.max(0,C.budget)+0.005){toast('O total dos limites ultrapassa o disponível. Reduza outro limite.');return}
+ const C=calc(),val=Number($('#limval').value),others=S.lim.filter(x=>x.categoria_id!==$('#limcat').value).reduce((a,x)=>a+Number(x.valor),0);if(!S.plan){toast('Crie o plano do mês antes de definir os limites.');return}if(others+val>Math.max(0,C.budget)+0.005&&!confirm('Os limites ultrapassam o disponível em '+R(others+val-Math.max(0,C.budget))+'. Salvar mesmo assim?'))return;
  const {error}=await db.from('limites').upsert({grupo_id:group,categoria_id:$('#limcat').value,mes:mk()+'-01',valor:Number($('#limval').value)},{onConflict:'grupo_id,categoria_id,mes'});
  if(error){toast('Não foi possível salvar o limite.');return}
  $('#limval').value='';toast('Limite salvo.');await refresh();
