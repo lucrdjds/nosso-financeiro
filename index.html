@@ -103,7 +103,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
    <div id="glist"></div>
   </section>
   <section id="v-limites" hidden>
-   <div class="sec" style="margin-top:0"><h2>Organizar meu mês</h2><p class="mut">1. Salário, fatura e valor para guardar. 2. Contas fixas. 3. Escolha os limites que fazem sentido para vocês.</p><button type="button" class="ghost wide" id="abrirPlano">1. Definir renda, fatura e reserva</button><button type="button" class="ghost wide" id="abrirContas">2. Cadastrar contas fixas</button><button type="button" class="ghost wide" id="abrirPagamentos">Acompanhar contas a pagar</button><p class="mut">Os limites contam o valor total das compras feitas no mês, inclusive parceladas.</p></div>
+   <div class="sec" style="margin-top:0"><h2>Organizar meu mês</h2><p class="mut">Confira renda e contas do mês de pagamento e depois ajuste os limites do ciclo.</p><button type="button" class="ghost wide" id="abrirPlano">1. Conferir renda, contas e faturas</button><button type="button" class="ghost wide" id="abrirContas">Gerenciar sugestões de contas fixas</button><button type="button" class="ghost wide" id="abrirPagamentos">Acompanhar contas a pagar</button><p class="mut">Os limites contam o valor total das compras feitas no mês, inclusive parceladas.</p></div>
    <div id="llist"></div>
    <div class="note" id="limresumo"></div><form id="limitform"><label>Categoria<select id="limcat" required></select></label><label>Limite do mês (R$)<input id="limval" type="number" min="0" step="0.01" required inputmode="decimal"></label><label>Ajuste pela barra<input id="limslider" type="range" min="0" max="0" step="0.01" value="0" aria-describedby="limsliderinfo"></label><p id="limsliderinfo" class="mut" aria-live="polite"></p><p id="limpreview" class="mut"></p><button class="wide">Salvar limite</button></form>
   </section>
@@ -146,7 +146,7 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
  <button class="wide">Salvar gasto</button>
 </form></dialog>
 
-<dialog id="cenario"><form id="cenarioform"><div class="dh"><h2>Preparar o mês de pagamento</h2><button type="button" class="ib" data-close aria-label="Fechar">×</button></div><p id="cenarioMes" class="mut"></p><label>Quanto vai entrar (R$)<input type="number" name="renda" min="0" step="0.01" required></label><label>Meta para guardar (R$)<input type="number" name="meta" min="0" step="0.01" required></label><p class="mut">Confira as contas sugeridas. Elas só valem para este mês depois de salvar.</p><div id="cenarioFixos"></div><button id="addCenarioFixo" type="button" class="ghost">Adicionar conta</button><p class="mut">Não inclua aqui fatura do cartão, compras já lançadas ou a meta de guardar.</p><button class="wide">Confirmar mês</button></form></dialog>
+<dialog id="cenario"><form id="cenarioform"><div class="dh"><h2>Preparar o mês de pagamento</h2><button type="button" class="ib" data-close aria-label="Fechar">×</button></div><p id="cenarioMes" class="mut"></p><label>Quanto vai entrar (R$)<input type="number" name="renda" min="0" step="0.01" required></label><label>Meta para guardar (R$)<input type="number" name="meta" min="0" step="0.01" required></label><p class="mut">Confira as contas sugeridas. Elas só valem para este mês depois de salvar.</p><div id="cenarioFixos"></div><button id="addCenarioFixo" type="button" class="ghost">Adicionar conta</button><h3 style="margin-top:20px">Faturas adicionais deste mês</h3><p class="mut">Inclua somente valores que ainda não estejam nas parcelas antigas, compras lançadas, outras contas ou fatura do plano antigo. Não repita o total de uma fatura já detalhada.</p><div id="cenarioFaturas"></div><button id="addCenarioFatura" type="button" class="ghost">Adicionar fatura adicional</button><p class="mut">Essas faturas valem somente para este mês. A conferência de duplicidade ainda é manual.</p><button class="wide">Confirmar mês</button></form></dialog>
 <dialog id="plan"><form id="planform">
  <div class="dh"><h2>Plano do mês</h2><button type="button" class="ib" data-close aria-label="Fechar"><i data-i="x"></i></button></div>
  <p class="mut">Valores compartilhados entre vocês. Não repita aqui o que já lançou como gasto ou fatura.</p>
@@ -208,7 +208,7 @@ function mesPagamento(){const n=S.y*12+S.mo+1;return Math.floor(n/12)+'-'+pad(n%
 function sugestaoCenario(){
  const target=mesPagamento(),exact=(S.scenarios||[]).find(x=>x.mes===target),past=(S.scenarios||[]).filter(x=>x.mes<target).sort((a,b)=>b.mes.localeCompare(a.mes))[0];
  if(exact)return {data:exact,confirmado:true};
- const old= S.plan;return {data:{renda:past?past.renda:(old?old.renda:0),meta:past?past.meta:2000,fixos:past?past.fixos:S.fixas.filter(x=>x.ativo).map(x=>({nome:x.descricao,valor:Number(x.valor)}))},confirmado:false};
+ const old= S.plan;return {data:{renda:past?past.renda:(old?old.renda:0),meta:past?past.meta:2000,fixos:past?(past.fixos||[]).filter(x=>x.tipo!=='fatura_adicional'):S.fixas.filter(x=>x.ativo).map(x=>({nome:x.descricao,valor:Number(x.valor)}))},confirmado:false};
 }
 function simular(C,override){
  const mes=mesPagamento(),sc=sugestaoCenario(),p=(S.allplans||[]).find(x=>x.mes===mes),base=Number((S.oldBills||[]).find(x=>x.mes===mes)?.valor||0);
@@ -218,31 +218,34 @@ function simular(C,override){
  const extra=S.aportes.filter(a=>a.data.slice(0,7)===mes.slice(0,7)).reduce((a,x)=>a+Number(x.valor),0);
  const limits=S.lim.map(x=>({categoria_id:x.categoria_id,valor:override&&override.id===x.categoria_id?override.valor:Number(x.valor)}));if(override&&!limits.some(x=>x.categoria_id===override.id))limits.push({categoria_id:override.id,valor:override.valor});
  const remain=limits.reduce((a,x)=>a+Math.max(0,x.valor-(C.buy[x.categoria_id]||0)/100),0);
- const fixed=(sc.data.fixos||[]).reduce((a,x)=>a+Number(x.valor||0),0);
+ const fixed=(sc.data.fixos||[]).filter(x=>x.tipo!=='fatura_adicional').reduce((a,x)=>a+Number(x.valor||0),0),additional=(sc.data.fixos||[]).filter(x=>x.tipo==='fatura_adicional').reduce((a,x)=>a+Number(x.valor||0),0);
  const manual=p?Number(p.fatura_anterior||0):0,other=p?Number(p.fixos||0):0;
- const ambiguous=base>0&&manual>0;
- const balance=Number(sc.data.renda)-fixed-other-base-manual-card-cash-extra-remain;
- return {mes,sc,base,card,cash,extra,remain,fixed,manual,other,balance,ambiguous};
+ const faturas=(sc.data.fixos||[]).filter(x=>x.tipo==='fatura_adicional'),normal=x=>String(x||'').trim().toLocaleLowerCase('pt-BR'),sameAccount=faturas.some(f=>(sc.data.fixos||[]).some(x=>x.tipo!=='fatura_adicional'&&normal(x.nome)===normal(f.nome))),sameCard=faturas.some(f=>S.cards.some(cd=>normal(cd.nome)===normal(f.nome)&&((C.bills[cd.id]||{})[n]||0)>0)|| (normal(f.nome).includes('picpay')&&base>0));
+ const ambiguous=(manual>0&&(base>0||card>0))||sameAccount||sameCard;
+ const balance=Number(sc.data.renda)-fixed-other-base-manual-card-cash-extra-remain-additional;
+ return {mes,sc,base,card,cash,extra,remain,fixed,manual,other,additional,balance,ambiguous};
 }
 function abrirCenario(){
- const sc=sugestaoCenario(),f=$('#cenarioform');f.renda.value=sc.data.renda;f.meta.value=sc.data.meta;$('#cenarioMes').textContent='Para '+MES(...mesPagamento().split('-').map((v,i)=>i===1?Number(v)-1:Number(v)).slice(0,2))+(sc.confirmado?' · valores confirmados':' · sugestões; confira e confirme');$('#cenarioFixos').replaceChildren();for(const x of (sc.data.fixos||[]))adicionarFixoCenario(x.nome,x.valor);$('#cenario').showModal();
+ const sc=sugestaoCenario(),f=$('#cenarioform');f.renda.value=sc.data.renda;f.meta.value=sc.data.meta;$('#cenarioMes').textContent='Para '+MES(...mesPagamento().split('-').map((v,i)=>i===1?Number(v)-1:Number(v)).slice(0,2))+(sc.confirmado?' · valores confirmados':' · sugestões; confira e confirme');$('#cenarioFixos').replaceChildren();$('#cenarioFaturas').replaceChildren();for(const x of (sc.data.fixos||[]))adicionarFixoCenario(x.nome,x.valor,x.tipo||'conta',x);$('#cenario').showModal();
 }
-function adicionarFixoCenario(nome='',valor=''){
- const row=h('div','lim'),name=h('input'),value=h('input'),del=h('button','ghost','Remover');name.type='text';name.placeholder='Nome da conta';name.maxLength=100;name.required=true;name.value=nome;name.setAttribute('aria-label','Nome da conta');value.type='number';value.min='0';value.step='0.01';value.required=true;value.value=valor;value.setAttribute('aria-label','Valor da conta');del.type='button';del.onclick=()=>row.remove();row.append(name,value,del);$('#cenarioFixos').append(row);
+function adicionarFixoCenario(nome='',valor='',tipo='conta',original=null){
+ const row=h('div','lim'),name=h('input'),value=h('input'),del=h('button','ghost','Remover');row._original=original;row.dataset.tipo=tipo;name.type='text';name.placeholder=tipo==='fatura_adicional'?'Nome do cartão ou fatura':'Nome da conta';name.maxLength=100;name.required=true;name.value=nome;name.setAttribute('aria-label','Nome da conta');value.type='number';value.min='0';value.step='0.01';value.required=true;value.value=valor;value.setAttribute('aria-label','Valor da conta');del.type='button';del.onclick=()=>row.remove();row.append(name,value,del);$(tipo==='fatura_adicional'?'#cenarioFaturas':'#cenarioFixos').append(row);
 }
 $('#addCenarioFixo').onclick=()=>adicionarFixoCenario();
-$('#cenarioform').onsubmit=async e=>{e.preventDefault();const f=e.target,fixos=[...$('#cenarioFixos').children].map(r=>({nome:r.querySelector('input[type=text]').value.trim(),valor:Number(r.querySelector('input[type=number]').value)}));if(fixos.some(x=>!x.nome||!Number.isFinite(x.valor)||x.valor<0)){toast('Confira os nomes e valores das contas.');return}const b=f.querySelector('button.wide');b.disabled=true;const {error}=await db.from('cenario_mensal').upsert({grupo_id:group,mes:mesPagamento(),renda:Number(f.renda.value),meta:Number(f.meta.value),fixos},{onConflict:'grupo_id,mes'});b.disabled=false;if(error){toast('Não foi possível confirmar o mês.');return}$('#cenario').close();toast('Mês confirmado.');await refresh()};
+$('#addCenarioFatura').onclick=()=>adicionarFixoCenario('','','fatura_adicional');
+$('#cenarioform').onsubmit=async e=>{e.preventDefault();const f=e.target,fixos=[...$('#cenarioFixos').children,...$('#cenarioFaturas').children].map(r=>({...r._original,nome:r.querySelector('input[type=text]').value.trim(),valor:Number(r.querySelector('input[type=number]').value),tipo:r.dataset.tipo}));if(fixos.some(x=>!x.nome||!Number.isFinite(x.valor)||x.valor<0)){toast('Confira os nomes e valores das contas.');return}const nomes=fixos.filter(x=>x.tipo==='fatura_adicional').map(x=>x.nome.trim().toLocaleLowerCase('pt-BR'));if(new Set(nomes).size!==nomes.length){toast('Há faturas adicionais repetidas. Confira antes de salvar.');return}if(nomes.length&&!confirm('As faturas adicionais não podem incluir compras, parcelas ou contas já consideradas. Você conferiu que esses valores ainda não estão no cálculo?'))return;const b=f.querySelector('button.wide');b.disabled=true;const {error}=await db.from('cenario_mensal').upsert({grupo_id:group,mes:mesPagamento(),renda:Number(f.renda.value),meta:Number(f.meta.value),fixos},{onConflict:'grupo_id,mes'});b.disabled=false;if(error){toast('Não foi possível confirmar o mês.');return}$('#cenario').close();toast('Mês confirmado.');await refresh()};
 
 /* ---------- telas ---------- */
 function rInicio(C){
  const el=$('#v-inicio');el.replaceChildren();const P=S.plan;el.append(h('div','home-intro',h('div','',h('p','','FINANÇAS DO CASAL'),h('h1','','Olá! 👋'),h('p','','Acompanhe o mês de um jeito simples.'))));
- const F=simular(C),date=F.mes.split('-').map(Number),hero=h('div','hero');
+ const F=simular(C),date=F.mes.split('-').map(Number),hero=h('div','hero'),normalNome=x=>String(x||'').trim().toLocaleLowerCase('pt-BR'),faltando=S.fixas.filter(x=>x.ativo&&!(F.sc.data.fixos||[]).some(y=>normalNome(y.nome)===normalNome(x.descricao)));
  hero.append(h('small','','Previsão para '+MES(date[0],date[1]-1)+(F.sc.confirmado?' · dados confirmados':' · dados sugeridos')));
- if(F.ambiguous){hero.append(h('div','big','Confira a fatura'),h('p','','Há uma fatura manual e parcelas antigas no mesmo mês. Não somamos automaticamente para evitar duplicidade.'))}
- else {hero.append(h('small','','Se usar os limites do ciclo'),h('div','big'+(F.balance<0?' neg':''),F.balance<0?'Faltariam ':'Sobrariam ',mv(Math.abs(F.balance))),h('p','',F.balance>=Number(F.sc.data.meta)?'Meta para guardar atingida.':F.balance>=0?'Faltam '+R(Number(F.sc.data.meta)-F.balance)+' para a meta de guardar.':'Os gastos previstos ultrapassam a renda.'))}
- hero.append(h('p','explain','Renda '+R(F.sc.data.renda)+' · contas '+R(F.fixed+F.other)+' · parcelas antigas '+R(F.base)+' · fatura manual adicional '+R(F.manual)+' · compras no cartão '+R(F.card)+' · restante dos limites '+R(F.remain)+' · débito/Pix '+R(F.cash)+' · aportes '+R(F.extra)+'.'));
+ if(F.ambiguous){hero.append(h('div','big','Confira a fatura'),h('p','','Há valores de fatura ou conta que podem estar repetidos. Confira os nomes e as compras ou parcelas já consideradas antes de confiar na previsão.'))}
+ else {hero.append(h('small','','Se usar os limites do ciclo'),h('div','big'+(F.balance<0?' neg':''),F.balance<0?'Faltariam ':'Sobrariam ',mv(Math.abs(F.balance))),h('p','',F.balance>=Number(F.sc.data.meta)?'Meta atingida nesta simulação.':F.balance>=0?'Faltam '+R(Number(F.sc.data.meta)-F.balance)+' para a meta de guardar.':'Os gastos previstos ultrapassam a renda.'))}
+ if(faltando.length)hero.append(h('p','explain','Atenção: há '+faltando.length+' conta(s) cadastrada(s) como recorrente(s) fora deste cenário. Confira se vencem neste mês: '+faltando.map(x=>x.descricao).join(', ')+'.'));
+ hero.append(h('p','explain','Renda '+R(F.sc.data.renda)+' · contas '+R(F.fixed+F.other)+' · parcelas antigas '+R(F.base)+' · fatura manual anterior '+R(F.manual)+' · faturas adicionais '+R(F.additional)+' · compras no cartão '+R(F.card)+' · restante dos limites '+R(F.remain)+' · débito/Pix '+R(F.cash)+' · aportes '+R(F.extra)+'.'));
  hero.append(h('small','','O restante dos limites é simulado no crédito para o próximo vencimento, sem parcelas. Ajuste conforme as compras reais. Fatura manual não deve repetir parcelas ou compras lançadas. Não é saldo bancário.'));
- const set=h('button','ghost wide',F.sc.confirmado?'Editar renda e contas':'Conferir renda e contas');set.onclick=abrirCenario;hero.append(set);el.append(hero);
+ const set=h('button','ghost wide',F.sc.confirmado?'Editar renda, contas e faturas':'Conferir renda, contas e faturas');set.onclick=abrirCenario;hero.append(set);el.append(hero);
  const quick=h('div','quick-grid');const q1=h('button','','Organizar o mês');q1.onclick=()=>show('limites');const q2=h('button','','Contas a pagar');q2.onclick=()=>show('contas');quick.append(q1,q2);el.append(quick);
  const sec=h('div','sec'),head=h('div','home-title',h('h2','','Seus limites'));const edit=h('button','ghost','Editar');edit.onclick=()=>show('limites');head.append(edit);sec.append(head,h('p','mut','Compras do ciclo '+periodoCiclo()+'. Quanto já foi e quanto ainda resta em cada categoria.'));
  const cards=S.cats.filter(c=>S.lim.some(l=>l.categoria_id===c.id));
@@ -268,7 +271,7 @@ function rInicio(C){
 
  if(P){const s=h('div','sec',h('h2','','Para onde vai a renda'));
   for(const [l,v] of [['Renda líquida',P.renda],['Contas fixas cadastradas',S.fixas.filter(x=>x.ativo).reduce((a,x)=>a+Number(x.valor),0)],['Outras contas fixas',P.fixos],['Fatura informada',P.fatura_anterior],['Cartões neste mês',C.cardC/100],['PIX, débito e dinheiro',C.cash/100],['Reserva informada no plano antigo (não descontada da simulação)',P.reserva],['Aportes extras',S.aportes.filter(a=>a.data.slice(0,7)===mk()&&!a.reserva).reduce((x,a)=>x+Number(a.valor),0)]])s.append(h('div','row',h('span','',l),mv(v)));
-  const b=h('button','ghost wide','Ajustar plano');b.onclick=openPlan;s.append(b);details.append(s)}
+  const b=h('button','ghost wide','Consultar plano antigo');b.onclick=openPlan;s.append(b);details.append(s)}
 
  const tot=Object.values(C.buy).reduce((a,b)=>a+b,0)/100,top=S.cats.map(c=>[c.nome,(C.buy[c.id]||0)/100]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,5);
  const s=h('div','sec',h('h2','','Onde mais gastaram',h('span','mut',mv(tot))));
@@ -334,7 +337,7 @@ function atualizarBarra(){
  slider.max=String(Math.max(Number(F.sc.data.renda)||0,current,val,1));slider.value=String(Math.min(Number(slider.max),val));slider.disabled=!cat;
  $('#limsliderinfo').textContent='A barra ajusta o limite desta categoria. A previsão abaixo considera os outros limites.';
  const box=$('#limresumo');box.replaceChildren(h('strong','','Previsão com este ajuste'));
- if(F.ambiguous){box.append(h('p','','Confira a fatura manual antes de calcular a sobra; ela pode repetir as parcelas antigas.'));$('#limpreview').textContent='Você pode salvar e conferir a fatura no plano.';return}
+ if(F.ambiguous){box.append(h('p','','Confira faturas e contas antes de calcular a sobra; valores podem estar repetidos.'));$('#limpreview').textContent='Você pode salvar e conferir a fatura no plano.';return}
  box.append(h('p','',F.balance>=0?'Sobrariam para guardar: '+R(F.balance):'Faltariam: '+R(-F.balance)),h('p','',F.balance>=Number(F.sc.data.meta)?'Meta de '+R(F.sc.data.meta)+' atingida.':'Abaixo da meta em '+R(Number(F.sc.data.meta)-F.balance)+'.'),h('p','mut','Simulação para '+MES(...F.mes.split('-').map((v,i)=>i===1?Number(v)-1:Number(v)).slice(0,2))+'; '+(F.sc.confirmado?'dados confirmados':'renda e contas sugeridas')+'. Inclui só o restante dos limites, além dos gastos já lançados.'));
  $('#limpreview').textContent='Para aumentar este limite, você pode reduzir outro; confirme o valor para salvar.';
 }
@@ -411,7 +414,7 @@ function show(v){
 $$('.nav [data-view]').forEach(b=>b.onclick=()=>show(b.dataset.view));
 function rContas(){const L=$('#contaslist');L.replaceChildren();if(!S.contas.length)L.append(h('div','empty','Nenhuma conta nesta lista. Adicione abaixo para acompanhar os pagamentos.'));for(const x of S.contas){const b=h('button','ghost',x.pago?'Pago ✓':'Marcar como pago');b.type='button';b.onclick=async()=>{b.disabled=true;const {error}=await db.from('contas_mensais').update({pago:!x.pago}).eq('id',x.id).eq('grupo_id',group);if(error){toast('Não foi possível atualizar a conta.');b.disabled=false;return}toast(x.pago?'Conta marcada como pendente.':'Conta marcada como paga.');await refresh()};L.append(h('div','row',h('div','',h('strong','',x.nome),h('small','',(x.vencimento?'Vence '+x.vencimento.split('-').reverse().join('/')+' · ':'')+R(x.valor))),b))}}
 $('#contaform').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),nome=f.get('nome').trim();if(!nome){toast('Informe o nome da conta.');return}const b=e.target.querySelector('button');b.disabled=true;const {error}=await db.from('contas_mensais').insert({grupo_id:group,mes:mk()+'-01',nome,valor:Number(f.get('valor')),vencimento:f.get('vencimento')||null});b.disabled=false;if(error){toast('Não foi possível adicionar a conta.');return}e.target.reset();toast('Conta adicionada.');await refresh()};
-$('#abrirPagamentos').onclick=()=>show('contas');$('#contasvoltar').onclick=()=>show('limites');$('#gear').onclick=()=>show('config');$('#abrirPlano').onclick=openPlan;$('#abrirContas').onclick=()=>show('config');
+$('#abrirPagamentos').onclick=()=>show('contas');$('#contasvoltar').onclick=()=>show('limites');$('#gear').onclick=()=>show('config');$('#abrirPlano').onclick=abrirCenario;$('#abrirContas').onclick=()=>show('config');
 $('#fixform').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),nome=f.get('nome').trim();if(!nome){toast('Informe o nome da conta.');return}const b=e.target.querySelector('button');b.disabled=true;const {error}=await db.from('despesas_fixas').insert({grupo_id:group,descricao:nome,valor:Number(f.get('valor'))});b.disabled=false;if(error){toast('Não foi possível salvar a conta fixa.');return}e.target.reset();toast('Conta fixa adicionada.');await refresh()};
 $('#abrirLimites').onclick=()=>show('limites');
 $('#novaMeta').onclick=()=>{$('#metaform').reset();$('#metadialog').showModal()};
