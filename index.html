@@ -164,7 +164,8 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
 <dialog id="profile"><form id="profileform"><div class="dh"><h2>Como podemos chamar você?</h2></div><p class="mut">Esse apelido aparece para as pessoas do seu espaço.</p><label>Seu apelido<input name="name" required minlength="1" maxlength="50"></label><button class="wide">Salvar apelido</button></form></dialog>
 <div id="toast" role="status" aria-live="polite"></div>
 
-<script>
+<script type="module">
+import { cicloCategoria, compraCredito, parcelasCentavos } from './desenvolvimento/motor.mjs';
 let installRequest=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installRequest=e;const banner=document.getElementById('installBanner');if(banner&&!window.matchMedia('(display-mode: standalone)').matches)banner.hidden=false});
 window.addEventListener('appinstalled',()=>{installRequest=null;const b=document.getElementById('installBanner');if(b)b.hidden=true});
@@ -188,22 +189,22 @@ let group=null,userId=null;S.contas=[];S.profiles=[];S.settlements=[];S.metas=[]
 const today=()=>new Date().toLocaleDateString('en-CA');
 
 /* ---------- cálculo ---------- */
-function noCiclo(date){if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;const [y,m,d]=date.split('-').map(Number);return y*12+m-1+(d>29?1:0)===S.y*12+S.mo}
-function periodoCiclo(){const prev=new Date(S.y,S.mo-1,1);return '30/'+pad(prev.getMonth()+1)+'/'+prev.getFullYear()+' a 29/'+pad(S.mo+1)+'/'+S.y}
+function noCiclo(date){try{return cicloCategoria(date,29).mes===mk()}catch{return false}}
+function periodoCiclo(){const ciclo=cicloCategoria(mk()+'-15',29),br=d=>d.split('-').reverse().join('/');return br(ciclo.inicio)+' a '+br(ciclo.fim)}
 function calc(){
- const k=mk(),t=S.y*12+S.mo;let cash=0,cardC=0;const buy={},bills={};
+ const k=mk(),t=S.y*12+S.mo;let cash=0,cardC=0,missingCards=false;const buy={},bills={};
  for(const g of S.gastos){
   const c=Math.round(g.valor*100),n=+g.parcelas||1,inM=g.data_compra.slice(0,7)===k;
   if(noCiclo(g.data_compra))buy[g.categoria_id]=(buy[g.categoria_id]||0)+c;
   if(!g.cartao_id){if(inM)cash+=c;continue}
-  const cd=S.cards.find(x=>x.id===g.cartao_id);if(!cd)continue;
-  const [y,m,d]=g.data_compra.split('-').map(Number),f=y*12+m-1+(d>cd.fechamento?1:0)+(cd.vencimento<=cd.fechamento?1:0);
+  const cd=S.cards.find(x=>x.id===g.cartao_id);if(!cd){missingCards=true;continue}
+  let result;try{result=compraCredito({data:g.data_compra,valor:c,parcelas:n},{fechamento:Number(cd.fechamento)||null,vencimento:Number(cd.vencimento)||null})}catch{missingCards=true;continue}if(result.dadosFaltando.length){missingCards=true;continue}
   const b=bills[cd.id]||(bills[cd.id]={});
-  for(let i=0;i<n;i++){const a=Math.floor(c/n)+(i<c%n?1:0);b[f+i]=(b[f+i]||0)+a;if(f+i===t)cardC+=a}
+  for(const p of result.parcelas){const [y,m]=p.mes.split('-').map(Number),f=y*12+m-1;b[f]=(b[f]||0)+p.valor;if(f===t)cardC+=p.valor}
  }
  const P=S.plan,fixas=S.fixas.filter(x=>x.ativo).reduce((a,x)=>a+Number(x.valor),0),extra=S.aportes.filter(x=>x.data.slice(0,7)===k&&!x.reserva).reduce((a,x)=>a+Number(x.valor),0),budget=P?Number(P.renda)-Number(P.fixos)-fixas-Number(P.fatura_anterior)-Number(P.reserva)-extra:0;
  const limitBudget=P?Number(P.renda)-Number(P.fixos)-fixas-Number(P.reserva)-extra:0;
- return{cash,cardC,buy,bills,budget,limitBudget,sobra:P?budget-(cash+cardC)/100:null};
+ return{cash,cardC,buy,bills,budget,limitBudget,missingCards,sobra:P?budget-(cash+cardC)/100:null};
 }
 
 function mesPagamento(){const n=S.y*12+S.mo+1;return Math.floor(n/12)+'-'+pad(n%12+1)+'-01'}
@@ -223,7 +224,7 @@ function simular(C,override){
  const fixed=(sc.data.fixos||[]).filter(x=>x.tipo!=='fatura_adicional').reduce((a,x)=>a+Number(x.valor||0),0),additional=(sc.data.fixos||[]).filter(x=>x.tipo==='fatura_adicional').reduce((a,x)=>a+Number(x.valor||0),0);
  const manual=p?Number(p.fatura_anterior||0):0,other=p?Number(p.fixos||0):0;
  const faturas=(sc.data.fixos||[]).filter(x=>x.tipo==='fatura_adicional'),normal=x=>String(x||'').trim().toLocaleLowerCase('pt-BR'),sameAccount=faturas.some(f=>(sc.data.fixos||[]).some(x=>x.tipo!=='fatura_adicional'&&normal(x.nome)===normal(f.nome))),sameCard=faturas.some(f=>S.cards.some(cd=>normal(cd.nome)===normal(f.nome)&&((C.bills[cd.id]||{})[n]||0)>0)|| (normal(f.nome).includes('picpay')&&base>0));
- const ambiguous=(manual>0&&(base>0||card>0))||sameAccount||sameCard;
+ const ambiguous=C.missingCards||(manual>0&&(base>0||card>0))||sameAccount||sameCard;
  const balance=Number(sc.data.renda)-fixed-other-base-manual-card-cash-extra-remain-additional;
  return {mes,sc,base,card,cash,extra,remain,fixed,manual,other,additional,balance,ambiguous};
 }
@@ -436,7 +437,7 @@ $('#profileform').onsubmit=async e=>{e.preventDefault();const nome=new FormData(
 
 /* ---------- lançar gasto ---------- */
 function chip(name,val,label,checked){const l=h('label'),i=h('input');i.type='radio';i.name=name;i.value=val;i.required=true;i.checked=checked;l.append(i,h('span','',label));return l}
-function instPrev(){const f=$('#expense'),n=Number(f.installments.value),v=Number(f.value.value),c=Math.round(v*100);if(!Number.isSafeInteger(c)||c<1||!Number.isInteger(n)||n<1||n>120){$('#instprev').textContent='';return}const base=Math.floor(c/n),resto=c%n;$('#instprev').textContent=n===1?'À vista no crédito: '+R(c/100):resto===0?n+' parcelas de '+R(base/100):resto+' parcela(s) de '+R((base+1)/100)+' e '+(n-resto)+' de '+R(base/100)+'. Os centavos são ajustados nas primeiras parcelas.'}
+function instPrev(){const f=$('#expense'),n=Number(f.installments.value),v=Number(f.value.value),c=Math.round(v*100);if(!Number.isSafeInteger(c)||c<1||!Number.isInteger(n)||n<1||n>120){$('#instprev').textContent='';return}const valores=parcelasCentavos(c,n),base=valores[valores.length-1],resto=valores.filter(x=>x>base).length;$('#instprev').textContent=n===1?'À vista no crédito: '+R(c/100):resto===0?n+' parcelas de '+R(base/100):resto+' parcela(s) de '+R((base+1)/100)+' e '+(n-resto)+' de '+R(base/100)+'. Os centavos são ajustados nas primeiras parcelas.'}
 $('#addbtn').onclick=()=>{
  const f=$('#expense');f.reset();$('#expmsg').textContent='';f.date.value=today();
  $('#catchips').replaceChildren(...S.cats.map((c,i)=>chip('category',c.id,c.nome,false)));
