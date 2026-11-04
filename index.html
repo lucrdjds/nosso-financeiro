@@ -133,13 +133,13 @@ details{margin-top:18px}summary{cursor:pointer;font-weight:800;color:var(--lagd)
 
 <dialog id="sheet"><form id="expense">
  <div class="dh"><h2>Novo gasto</h2><button type="button" class="ib" data-close aria-label="Fechar"><i data-i="x"></i></button></div>
- <label>Valor (R$)<input class="amt" name="value" type="number" min="0.01" step="0.01" required inputmode="decimal" placeholder="0,00"></label>
+ <label>Valor total da compra (R$)<input class="amt" name="value" type="number" min="0.01" step="0.01" required inputmode="decimal" placeholder="0,00"></label>
  <label>Com o que você gastou?<input name="description" required maxlength="200" placeholder="Ex.: Mercado da semana"></label>
  <label>Categoria</label><div class="chips" id="catchips"></div>
  <label>Como pagou?</label><div class="chips" id="paychips"></div><p id="payinfo" class="mut" aria-live="polite"></p><button id="goCards" type="button" class="ghost" hidden>Cadastrar cartão</button>
  <label>Quem pagou?</label><div class="chips" id="payerchips"></div>
  <div id="splitchips" hidden></div><div id="pctwrap" hidden><input name="pct" type="number" value="50"></div>
- <div id="instwrap" hidden><label>Parcelas<input name="installments" type="number" min="1" max="120" value="1"></label><p id="instprev" class="mut"></p></div>
+ <div id="instwrap" hidden><label>Quantidade de parcelas<input name="installments" type="number" min="1" max="120" step="1" value="1" required inputmode="numeric"></label><p id="instprev" class="mut" aria-live="polite"></p></div>
  <label>Data<input name="date" type="date" required></label>
  <label>Observação (opcional)<input name="note" maxlength="200"></label>
  <p id="expmsg" class="err"></p>
@@ -432,7 +432,7 @@ $('#profileform').onsubmit=async e=>{e.preventDefault();const nome=new FormData(
 
 /* ---------- lançar gasto ---------- */
 function chip(name,val,label,checked){const l=h('label'),i=h('input');i.type='radio';i.name=name;i.value=val;i.required=true;i.checked=checked;l.append(i,h('span','',label));return l}
-function instPrev(){const f=$('#expense'),n=Number(f.installments.value),v=Number(f.value.value);$('#instprev').textContent=n>1&&v>0?n+'x de '+R(v/n):''}
+function instPrev(){const f=$('#expense'),n=Number(f.installments.value),v=Number(f.value.value),c=Math.round(v*100);if(!Number.isSafeInteger(c)||c<1||!Number.isInteger(n)||n<1||n>120){$('#instprev').textContent='';return}const base=Math.floor(c/n),resto=c%n;$('#instprev').textContent=n===1?'À vista no crédito: '+R(c/100):resto===0?n+' parcelas de '+R(base/100):resto+' parcela(s) de '+R((base+1)/100)+' e '+(n-resto)+' de '+R(base/100)+'. Os centavos são ajustados nas primeiras parcelas.'}
 $('#addbtn').onclick=()=>{
  const f=$('#expense');f.reset();$('#expmsg').textContent='';f.date.value=today();
  $('#catchips').replaceChildren(...S.cats.map((c,i)=>chip('category',c.id,c.nome,false)));
@@ -441,18 +441,23 @@ $('#addbtn').onclick=()=>{
  $('#splitchips').replaceChildren(...[['igual','50/50'],['so_eu','Só quem pagou'],['so_parceiro','Só a outra pessoa'],['percentual','Personalizado']].map(([v,t])=>chip('split',v,t,v==='igual')));$('#pctwrap').hidden=true;
  $('#instwrap').hidden=true;instPrev();$('#sheet').showModal();f.value.focus();
 };
-function pagamentoPrev(){const f=$('#expense'),fd=new FormData(f),choice=fd.get('card'),card=S.cards.find(c=>c.id===choice),date=fd.get('date');if(choice===null){$('#payinfo').textContent='Escolha como pagou.';return}if(!card){$('#payinfo').textContent='PIX, débito ou dinheiro: desconta do mês da compra.';return}if(!date){$('#payinfo').textContent='Informe a data para ver a fatura.';return}const [y,m,d]=date.split('-').map(Number),n=y*12+m-1+(d>card.fechamento?1:0)+(card.vencimento<=card.fechamento?1:0);$('#payinfo').textContent='Crédito '+card.nome+': primeira parcela prevista para '+MES(Math.floor(n/12),n%12)+'. Confira no banco.'}
+function pagamentoPrev(){const f=$('#expense'),fd=new FormData(f),choice=fd.get('card'),card=S.cards.find(c=>c.id===choice),date=fd.get('date'),cat=S.cats.find(c=>c.id===fd.get('category'));if(choice===null){$('#payinfo').textContent='Escolha como pagou.';return}if(!date||!/^\d{4}-\d{2}-\d{2}$/.test(date)){$('#payinfo').textContent='Informe a data para ver o ciclo e a fatura.';return}const [y,m,d]=date.split('-').map(Number),ciclo=y*12+m-1+(d>29?1:0),prefix='Conta no limite de '+(cat?cat.nome:'a categoria escolhida')+' no ciclo de '+MES(Math.floor(ciclo/12),ciclo%12)+'. ';if(!card){$('#payinfo').textContent=prefix+'PIX, débito ou dinheiro: pagamento no mês da compra.';return}if(!Number.isInteger(Number(card.fechamento))||Number(card.fechamento)<1||Number(card.fechamento)>31||!Number.isInteger(Number(card.vencimento))||Number(card.vencimento)<1||Number(card.vencimento)>31){$('#payinfo').textContent=prefix+'Cadastre fechamento e vencimento do cartão para prever a fatura.';return}const n=y*12+m-1+(d>card.fechamento?1:0)+(card.vencimento<=card.fechamento?1:0);$('#payinfo').textContent=prefix+'Primeira parcela no '+card.nome+' prevista para '+MES(Math.floor(n/12),n%12)+'. Confira no banco.'}
 $('#goCards').onclick=()=>{$('#sheet').close();show('config');$('#cardForm').scrollIntoView({behavior:'smooth',block:'start'})};
 $('#paychips').onchange=()=>{const f=$('#expense'),card=new FormData(f).get('card');$('#instwrap').hidden=!card;if(!card)f.installments.value=1;instPrev();pagamentoPrev()};
 $('#splitchips').onchange=()=>{$('#pctwrap').hidden=new FormData($('#expense')).get('split')!=='percentual'};
 $('#expense').oninput=()=>{instPrev();pagamentoPrev()};
-$('#expense').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);
+let salvandoGasto=false;
+$('#expense').onsubmit=async e=>{e.preventDefault();if(salvandoGasto)return;const f=new FormData(e.target);
  if(!f.get('category')){$('#expmsg').textContent='Escolha uma categoria.';return}
  if(f.get('card')===null){$('#expmsg').textContent='Escolha como pagou.';return}
  if(!f.get('payer')){toast('Cadastre seu apelido e escolha quem pagou.');return}
- const {error}=await db.from('gastos').insert({grupo_id:group,categoria_id:f.get('category'),descricao:f.get('description').trim(),valor:Number(f.get('value')),data_compra:f.get('date'),cartao_id:f.get('card')||null,parcelas:f.get('card')?Number(f.get('installments')):1,observacao:f.get('note')||null,pago_por:f.get('payer'),divisao:f.get('split'),pct_pagador:Number(f.get('pct'))});
- if(error){$('#expmsg').textContent='Não foi possível salvar o gasto.';toast('Não foi possível salvar o gasto.');return}
- $('#sheet').close();toast('Gasto salvo.');await refresh();
+ const card=S.cards.find(c=>c.id===f.get('card')),valor=Number(f.get('value')),parcelas=f.get('card')?Number(f.get('installments')):1;
+ if(!Number.isFinite(valor)||valor<=0||!Number.isInteger(parcelas)||parcelas<1||parcelas>120||!f.get('description').trim()){$('#expmsg').textContent='Confira descrição, valor e parcelas.';return}
+ if(f.get('card')&&(!card||!Number.isInteger(Number(card.fechamento))||Number(card.fechamento)<1||Number(card.fechamento)>31||!Number.isInteger(Number(card.vencimento))||Number(card.vencimento)<1||Number(card.vencimento)>31)){$('#expmsg').textContent='Cadastre fechamento e vencimento do cartão antes de continuar.';return}
+ const button=e.target.querySelector('button[type="submit"], button.wide');salvandoGasto=true;button.disabled=true;$('#expmsg').textContent='Salvando...';
+ try{const {error}=await db.from('gastos').insert({grupo_id:group,categoria_id:f.get('category'),descricao:f.get('description').trim(),valor,data_compra:f.get('date'),cartao_id:f.get('card')||null,parcelas,observacao:f.get('note')||null,pago_por:f.get('payer'),divisao:f.get('split'),pct_pagador:Number(f.get('pct'))});
+ if(error)throw error;$('#sheet').close();toast('Gasto salvo.');await refresh();
+ }catch{$('#expmsg').textContent='Não foi possível confirmar o gasto. Confira a lista antes de tentar de novo, para evitar duplicidade.';toast('Não foi possível confirmar o gasto. Confira a lista.')}finally{salvandoGasto=false;button.disabled=false}
 };
 
 /* ---------- plano ---------- */
