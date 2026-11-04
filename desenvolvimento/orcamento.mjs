@@ -25,7 +25,8 @@ export function ajustarLimite(plano, id, valor) {
   if (!item) throw new Error('Categoria não encontrada');
   const outros = plano.limites.filter(x => x.id !== id).reduce((s,x) => s + cents(x.valor, 'Limite'), cents(plano.guardar ?? 0, 'Guardar'));
   const teto = Math.max(0, cents(plano.renda, 'Renda') - cents(plano.compromissos, 'Compromissos') - outros);
-  if (valor > teto) return { aceito:false, teto, mensagem:'Esse valor ultrapassa o disponível. Reduza outro limite, aumente a renda ou diminua Guardar.' };
+  // Um plano antigo pode já estar acima do teto: permitir reduções graduais.
+  if (valor > teto && valor >= item.valor) return { aceito:false, teto, mensagem:'Esse valor ultrapassa o disponível. Reduza outro limite, aumente a renda ou diminua Guardar.' };
   const limites = plano.limites.map(x => x.id === id ? {...x,valor} : {...x});
   return { aceito:true, teto, plano:{...plano,limites}, resumo:distribuir({...plano,limites}) };
 }
