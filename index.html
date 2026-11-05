@@ -337,14 +337,22 @@ function rLimites(C){
  const keep=$('#limcat').value;$('#limcat').replaceChildren(...S.cats.map(c=>{const o=h('option','',c.nome);o.value=c.id;return o}));if(keep)$('#limcat').value=keep;
  atualizarBarra();
 }
+function tetoLimite(cat,C){
+ const atual=Number(S.lim.find(x=>x.categoria_id===cat)?.valor||0),gasto=(C.buy[cat]||0)/100,F=simular(C);
+ const incerto=F.ambiguous||!F.sc.confirmado;
+ // A previsão já inclui compras e apenas o restante não gasto dos limites.
+ // Recoloca-se a parte não gasta desta categoria para calcular seu teto.
+ const teto=incerto?atual:Math.max(0,Math.round((gasto+Math.max(0,atual-gasto)+F.balance)*100)/100);
+ return {atual,teto,F,incerto};
+}
 function atualizarBarra(){
- const cat=$('#limcat').value,current=Number(S.lim.find(x=>x.categoria_id===cat)?.valor||0),raw=$('#limval').value,val=raw===''?current:Math.max(0,Number(raw)||0),C=calc(),F=simular(C,{id:cat,valor:val}),slider=$('#limslider');
- slider.max=String(Math.max(Number(F.sc.data.renda)||0,current,val,1));slider.value=String(Math.min(Number(slider.max),val));slider.disabled=!cat;
- $('#limsliderinfo').textContent='A barra ajusta o limite desta categoria. A previsão abaixo considera os outros limites.';
+ const cat=$('#limcat').value,current=Number(S.lim.find(x=>x.categoria_id===cat)?.valor||0),raw=$('#limval').value,val=raw===''?current:Math.max(0,Number(raw)||0),C=calc(),F=simular(C,{id:cat,valor:val}),slider=$('#limslider'),lim=tetoLimite(cat,C);
+ slider.max=String(Math.max(lim.atual,lim.teto,0));slider.value=String(Math.min(Number(slider.max),val));slider.disabled=!cat;
+ $('#limsliderinfo').textContent=lim.incerto?'Confirme renda e contas e revise possíveis faturas repetidas antes de aumentar um limite. Você ainda pode reduzir.':'Máximo estimado para esta categoria: '+R(lim.teto)+'. A barra considera os outros limites e compromissos.';
  const box=$('#limresumo');box.replaceChildren(h('strong','','Previsão com este ajuste'));
- if(F.ambiguous){box.append(h('p','','Confira faturas e contas antes de calcular a sobra; valores podem estar repetidos.'));$('#limpreview').textContent='Você pode salvar e conferir a fatura no plano.';return}
+ if(F.ambiguous){box.append(h('p','','Confira faturas e contas antes de calcular a sobra; valores podem estar repetidos.'));$('#limpreview').textContent='Reduza este limite ou revise as faturas para poder aumentá-lo.';return}
  box.append(h('p','',F.balance>=0?'Sobrariam para guardar: '+R(F.balance):'Faltariam: '+R(-F.balance)),h('p','',F.balance>=Number(F.sc.data.meta)?'Meta de '+R(F.sc.data.meta)+' atingida.':'Abaixo da meta em '+R(Number(F.sc.data.meta)-F.balance)+'.'),h('p','mut','Simulação para '+MES(...F.mes.split('-').map((v,i)=>i===1?Number(v)-1:Number(v)).slice(0,2))+'; '+(F.sc.confirmado?'dados confirmados':'renda e contas sugeridas')+'. Inclui só o restante dos limites, além dos gastos já lançados.'));
- $('#limpreview').textContent='Para aumentar este limite, você pode reduzir outro; confirme o valor para salvar.';
+ $('#limpreview').textContent=val>lim.teto&&val>=lim.atual?'Esse valor ultrapassa o disponível. Reduza outro limite ou revise a renda e as contas.':val>lim.teto?'O plano está acima do disponível; esta redução ajuda a ajustá-lo.':'Ainda sem destino após este ajuste: '+R(Math.max(0,F.balance))+'. A meta de guardar é uma referência, não um valor bloqueado.';
 }
 
 $('#limcat').onchange=()=>{const item=S.lim.find(x=>x.categoria_id===$('#limcat').value);$('#limval').value=item?item.valor:'';atualizarBarra()};
@@ -475,7 +483,10 @@ $('#planform').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.targ
 
 /* ---------- limites, categorias, cartões ---------- */
 $('#limitform').onsubmit=async e=>{e.preventDefault();
- const val=Number($('#limval').value),cat=$('#limcat').value;if(!cat||!Number.isFinite(val)||val<0){toast('Informe um limite válido.');return}const F=simular(calc(),{id:cat,valor:val});if(!F.ambiguous&&F.balance<Number(F.sc.data.meta)&&!confirm('Com este limite, a previsão fica abaixo da meta de guardar. Você pode reduzir outro limite ou salvar assim mesmo. Salvar?'))return;
+ const val=Number($('#limval').value),cat=$('#limcat').value;if(!cat||!Number.isFinite(val)||val<0){toast('Informe um limite válido.');return}const C=calc(),lim=tetoLimite(cat,C),F=simular(C,{id:cat,valor:val});
+ if(val>lim.atual&&(lim.incerto||val>lim.teto+0.001)){const msg=lim.incerto?'Confirme renda e contas e revise faturas antes de aumentar este limite.':'Esse limite ultrapassa o disponível. Reduza outro limite ou revise renda e contas.';$('#limpreview').textContent=msg;toast(msg);return}
+ if(val>=lim.atual&&val>lim.teto+0.001){const msg='O plano está acima do disponível. Reduza este ou outro limite.';$('#limpreview').textContent=msg;toast(msg);return}
+ if(!F.ambiguous&&F.balance<Number(F.sc.data.meta)&&!confirm('Com este limite, a previsão fica abaixo da meta de guardar. Você pode reduzir outro limite ou salvar assim mesmo. Salvar?'))return;
 
  const {error}=await db.from('limites').upsert({grupo_id:group,categoria_id:$('#limcat').value,mes:mk()+'-01',valor:Number($('#limval').value)},{onConflict:'grupo_id,categoria_id,mes'});
  if(error){toast('Não foi possível salvar o limite.');return}
