@@ -1,0 +1,11 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {consolidarFaturas} from './motor.mjs';
+const mes='2026-12',cartoes=[{id:'picpay'},{id:'nubank'}];
+const dados=()=>({mes,cartoes,compras:[{id:'uber-1',cartaoId:'picpay',mes,valor:2000}],historicos:[{id:'antiga-1',cartaoId:'picpay',mes,valor:133216}],totais:[],adicionais:[]});
+test('sem total, soma parcelas antigas e compra uma só vez',()=>{assert.equal(consolidarFaturas(dados()).valor,135216)});
+test('total informado substitui itens incluídos e adicional soma',()=>{const d=dados();d.totais=[{cartaoId:'picpay',mes,valor:150000}];d.adicionais=[{id:'extra',cartaoId:'picpay',mes,valor:10000}];const r=consolidarFaturas(d);assert.equal(r.valor,160000);assert.equal(r.aRevisar,false)});
+test('total menor que itens usa maior e pede revisão',()=>{const d=dados();d.totais=[{cartaoId:'picpay',mes,valor:100000}];const r=consolidarFaturas(d);assert.equal(r.valor,135216);assert.equal(r.aRevisar,true)});
+test('faturas de cartões distintos não se misturam',()=>{const d=dados();d.totais=[{cartaoId:'nubank',mes,valor:60000}];assert.equal(consolidarFaturas(d).valor,195216)});
+test('impede total repetido e itens repetidos',()=>{const d=dados();d.totais=[{cartaoId:'picpay',mes,valor:150000},{cartaoId:'picpay',mes,valor:150000}];assert.throws(()=>consolidarFaturas(d));const e=dados();e.compras.push({...e.compras[0]});assert.throws(()=>consolidarFaturas(e))});
+test('ignora outra fatura e exige cartão conhecido',()=>{const d=dados();d.totais=[{cartaoId:'picpay',mes:'2027-01',valor:100000}];assert.equal(consolidarFaturas(d).valor,135216);d.totais=[{cartaoId:'outro',mes,valor:1}];assert.throws(()=>consolidarFaturas(d))});
