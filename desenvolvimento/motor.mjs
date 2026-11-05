@@ -27,6 +27,21 @@ export function fatura({total=null,itens=[],adicional=0}){
  if(total!==null)inteiro(total,'total');inteiro(adicional,'adicional');let soma=0;const ids=new Set();for(const i of itens){if(!i.id||ids.has(i.id))throw Error('Item duplicado ou sem identificação');ids.add(i.id);soma+=inteiro(i.valor,'item')}
  const revisar=total!==null&&soma>total;return {itens:soma,total,adicional,valor:Math.max(total??0,soma)+adicional,aRevisar:revisar};
 }
+// Cada cartão/mês tem no máximo um total informado. Itens históricos só
+// são incluídos quando a origem for explicitamente vinculada pelo usuário.
+export function consolidarFaturas({mes,cartoes,compras,totais=[],adicionais=[],historicos=[]}){
+ if(!/^\d{4}-\d{2}$/.test(mes))throw Error('Mês inválido');
+ const ids=new Set(), map=new Map();
+ for(const c of cartoes){if(!c.id||ids.has(c.id))throw Error('Cartão ausente ou repetido');ids.add(c.id);map.set(c.id,{cartaoId:c.id,itens:[],total:null,adicional:0})}
+ const usados=new Set();
+ function destino(x){if(x.mes!==mes)return null;const d=map.get(x.cartaoId);if(!d)throw Error('Cartão da fatura não encontrado');return d}
+ for(const x of compras){const d=destino(x);if(!d)continue;if(!x.id||usados.has(x.id))throw Error('Compra ou parcela repetida');usados.add(x.id);d.itens.push({id:x.id,valor:inteiro(x.valor,'compra')})}
+ for(const x of historicos){const d=destino(x);if(!d)continue;if(!x.id||usados.has(x.id))throw Error('Parcela histórica repetida');usados.add(x.id);d.itens.push({id:x.id,valor:inteiro(x.valor,'parcela histórica')})}
+ for(const x of totais){const d=destino(x);if(!d)continue;if(d.total!==null)throw Error('Mais de um total para o mesmo cartão e mês');d.total=inteiro(x.valor,'total')}
+ for(const x of adicionais){const d=destino(x);if(!d)continue;if(!x.id||usados.has(x.id))throw Error('Adicional repetido');usados.add(x.id);d.adicional+=inteiro(x.valor,'adicional')}
+ const detalhes=[...map.values()].map(d=>({cartaoId:d.cartaoId,...fatura(d)}));
+ return {valor:detalhes.reduce((n,d)=>n+d.valor,0),aRevisar:detalhes.some(d=>d.aRevisar),detalhes};
+}
 export function obrigacoesMes(obrigações,mes){
  const ids=new Set(),vinculos=new Set();let valor=0;const detalhes=[];for(const o of obrigações){if(!o.id||ids.has(o.id))throw Error('Obrigação duplicada ou sem identificação');ids.add(o.id);if(o.mes!==mes)continue;
  if(o.tipo==='pagamento_fatura')throw Error('Pagamento de fatura não deve criar nova obrigação');
